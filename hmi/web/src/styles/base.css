@@ -1,0 +1,120 @@
+/* Base, encabezado, tarjetas, botones y cifras. Clases tomadas del Simulador_Balancin
+   para que ambas herramientas se vean como una familia. */
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Century Gothic","Questrial","Futura","Trebuchet MS",system-ui,-apple-system,sans-serif;
+  font-size:14px; line-height:1.5;
+  -webkit-text-size-adjust:100%;
+}
+.mono{font-family:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,monospace; font-variant-numeric:tabular-nums}
+h1,h2,h3{margin:0; text-wrap:balance; font-weight:400}
+a{color:var(--azul)}
+button, input, select{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--azul-claro); outline-offset:2px}
+[hidden]{display:none !important}
+
+/* ===================== encabezado ===================== */
+header.top{
+  background:var(--surface); border-bottom:1px solid var(--line);
+  padding:13px clamp(14px,3vw,28px);
+  display:grid; grid-template-columns:auto minmax(0,1fr) auto auto;
+  align-items:center; gap:0 20px;
+}
+.marcas{display:flex; align-items:center; gap:11px; padding-right:19px; border-right:1px solid var(--line-soft)}
+/* Los logos llevan trazo negro y azul oscuro: van sobre placa blanca para el tema oscuro. */
+.marcas .logo{display:block; width:auto; background:#fff; border-radius:7px; padding:3px 5px}
+#logoUni{height:52px}
+#logoMec{height:48px}
+.autoria{
+  text-align:right; padding-left:19px; border-left:1px solid var(--line-soft);
+  display:flex; flex-direction:column; gap:1px;
+}
+.autoria .rot{font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3); margin-bottom:1px}
+.autoria .nom{font-size:13px; color:var(--ink); letter-spacing:-.01em}
+.autoria .det{font-size:11.5px; color:var(--ink-2)}
+.autoria .mail{font-size:11.5px; color:var(--azul); text-decoration:none; margin-top:1px}
+.autoria .mail:hover{text-decoration:underline}
+.eyebrow{font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3); margin-bottom:3px}
+header.top h1{font-size:clamp(19px,2.6vw,25px); letter-spacing:-.01em}
+header.top .sub{color:var(--ink-2); font-size:12.5px; max-width:66ch; margin-top:4px}
+@media (max-width:1180px){
+  header.top{grid-template-columns:auto minmax(0,1fr) auto; row-gap:11px}
+  .autoria{
+    grid-column:1/-1; text-align:left; border-left:0; padding-left:0;
+    border-top:1px solid var(--line-soft); padding-top:10px;
+  }
+}
+@media (max-width:640px){
+  header.top{grid-template-columns:minmax(0,1fr) auto; padding:10px 14px}
+  .marcas{border-right:0; padding-right:0}
+  #logoUni{height:40px} #logoMec{height:37px}
+  .titulo{grid-column:1/-1; order:3}
+  #btnTema{order:2}
+  header.top .sub{display:none}
+  .autoria{order:4; flex-direction:row; flex-wrap:wrap; column-gap:10px; align-items:baseline}
+  .autoria .rot, .autoria .det{display:none}
+}
+
+/* ===================== tarjetas ===================== */
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); min-width:0}
+.card > .card-head{
+  display:flex; align-items:center; gap:10px; padding:9px 13px; border-bottom:1px solid var(--line-soft);
+  flex-wrap:wrap; row-gap:6px;
+}
+.card-head h2{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3)}
+.card-head .hint{margin-left:auto; font-size:11.5px; color:var(--ink-3)}
+.card-body{padding:12px 13px; display:flex; flex-direction:column; gap:10px}
+
+/* ===================== cifras ===================== */
+.tiles{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px}
+@media (max-width:1380px){ .tiles{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:520px){ .tiles{grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px} }
+.tile{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+  padding:10px 13px 11px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:2px; min-width:0;
+}
+.tile .lbl{font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3)}
+.tile .val{font-size:24px; letter-spacing:-.02em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tile .val small{font-size:12px; color:var(--ink-2); letter-spacing:0}
+.tile .foot{font-size:11px; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+@media (max-width:520px){ .tile .val{font-size:20px} }
+
+/* ===================== botones y estados ===================== */
+.btn{
+  border:1px solid var(--line); background:var(--surface-2); border-radius:7px;
+  padding:6px 11px; font-size:12.5px; cursor:pointer; color:var(--ink);
+  min-height:32px;
+}
+.btn:hover:not(:disabled){border-color:var(--ink-3)}
+.btn:disabled{opacity:.5; cursor:default}
+.btn.primary{background:var(--azul); border-color:var(--azul); color:#fff}
+:root[data-theme="dark"] .btn.primary{color:#0E1218}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .btn.primary{color:#0E1218} }
+.btn.small{padding:4px 8px; font-size:11.5px; min-height:26px}
+.btn[aria-pressed="true"]{background:var(--azul); border-color:var(--azul); color:#fff}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:7px; overflow:hidden}
+.seg button{border:0; background:var(--surface-2); padding:5px 10px; font-size:12px; cursor:pointer; min-height:30px}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--azul); color:#fff}
+:root[data-theme="dark"] .seg button[aria-pressed="true"]{color:#0E1218}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .seg button[aria-pressed="true"]{color:#0E1218} }
+
+.pill{
+  display:inline-block; font-size:11px; padding:2px 9px; border-radius:999px; border:1px solid var(--line);
+  background:var(--surface); color:var(--ink-2); letter-spacing:.02em; white-space:nowrap;
+}
+.pill.ok{border-color:color-mix(in srgb,var(--verde) 45%,transparent); color:var(--verde)}
+.pill.mal{border-color:color-mix(in srgb,var(--rojo) 50%,transparent); color:var(--rojo)}
+.pill.info{border-color:color-mix(in srgb,var(--azul) 40%,transparent); color:var(--azul)}
+.pill.warn{border-color:color-mix(in srgb,var(--ambar) 50%,transparent); color:var(--ambar)}
+
+select, input[type=text], input[type=number]{
+  border:1px solid var(--line); border-radius:7px; background:var(--surface-2);
+  padding:5px 8px; font-size:12.5px; min-height:32px; min-width:0;
+}
+.field{display:flex; flex-direction:column; gap:3px}
+.field > span{font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3)}
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.muted{color:var(--ink-3)}
+.err{color:var(--rojo); font-size:12px}

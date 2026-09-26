@@ -1,0 +1,193 @@
+[
+ {
+  "key": "structure",
+  "type": "enum",
+  "options": [
+   "SpeedOuter",
+   "AngleOuter"
+  ],
+  "def": "SpeedOuter",
+  "unit": "",
+  "desc": "Estructura de control (SpeedOuter / AngleOuter). Reinicia el controlador."
+ },
+ {
+  "key": "setpoint_angle",
+  "type": "float",
+  "min": -10,
+  "max": 10,
+  "def": 0,
+  "unit": "°",
+  "desc": "Referencia del lazo de ángulo."
+ },
+ {
+  "key": "kp_min",
+  "type": "float",
+  "min": 0,
+  "max": 150,
+  "def": 70,
+  "unit": "",
+  "desc": "Kp mínima que puede elegir la RN."
+ },
+ {
+  "key": "kp_max",
+  "type": "float",
+  "min": 0,
+  "max": 150,
+  "def": 70,
+  "unit": "",
+  "desc": "Kp máxima que puede elegir la RN (= kp_min: Kp fija)."
+ },
+ {
+  "key": "kd_angle",
+  "type": "float",
+  "min": 0,
+  "max": 5,
+  "def": 1.25,
+  "unit": "",
+  "desc": "Acción derivativa del lazo de ángulo."
+ },
+ {
+  "key": "ki_angle",
+  "type": "float",
+  "min": 0,
+  "max": 10,
+  "def": 1,
+  "unit": "",
+  "desc": "Integral del lazo de ángulo (AngleOuter)."
+ },
+ {
+  "key": "kp_speed",
+  "type": "float",
+  "min": 0,
+  "max": 3,
+  "def": 0.8,
+  "unit": "",
+  "desc": "Proporcional del lazo interno de velocidad (AngleOuter)."
+ },
+ {
+  "key": "ki_speed",
+  "type": "float",
+  "min": 0,
+  "max": 2,
+  "def": 0,
+  "unit": "",
+  "desc": "Integral del lazo interno de velocidad (AngleOuter)."
+ },
+ {
+  "key": "kp_v",
+  "type": "float",
+  "min": 0,
+  "max": 0.5,
+  "def": 0.05,
+  "unit": "°/RPM",
+  "desc": "Proporcional del lazo externo de velocidad (SpeedOuter)."
+ },
+ {
+  "key": "ki_v",
+  "type": "float",
+  "min": 0,
+  "max": 0.5,
+  "def": 0.03,
+  "unit": "°/(RPM·s)",
+  "desc": "Integral del lazo externo de velocidad (SpeedOuter)."
+ },
+ {
+  "key": "speed_sign",
+  "type": "sign",
+  "min": -1,
+  "max": 1,
+  "def": -1,
+  "unit": "",
+  "desc": "Signo del lazo externo de velocidad (SpeedOuter)."
+ },
+ {
+  "key": "speed_ref",
+  "type": "float",
+  "min": -30,
+  "max": 30,
+  "def": 0,
+  "unit": "RPM",
+  "desc": "Velocidad deseada (SpeedOuter)."
+ },
+ {
+  "key": "max_tilt_ref",
+  "type": "float",
+  "min": 0,
+  "max": 10,
+  "def": 4,
+  "unit": "°",
+  "desc": "Límite del ángulo deseado que pide el lazo de velocidad."
+ },
+ {
+  "key": "pwm_deadband",
+  "type": "float",
+  "min": 0,
+  "max": 40,
+  "def": 14,
+  "unit": "PWM",
+  "desc": "Compensación de zona muerta (0 = desactivada)."
+ },
+ {
+  "key": "nn_error_band",
+  "type": "float",
+  "min": 0,
+  "max": 5,
+  "def": 1,
+  "unit": "°",
+  "desc": "La RN sube Kp si |e| supera esta banda y la baja si no."
+ },
+ {
+  "key": "nn_lr",
+  "type": "float",
+  "min": 0,
+  "max": 3,
+  "def": 0.5,
+  "unit": "",
+  "desc": "Tasa de aprendizaje de la RN."
+ },
+ {
+  "key": "kp_tau",
+  "type": "float",
+  "min": 0,
+  "max": 2,
+  "def": 0.3,
+  "unit": "s",
+  "desc": "Constante de tiempo del filtro de Kp."
+ },
+ {
+  "key": "max_angle",
+  "type": "float",
+  "min": 10,
+  "max": 60,
+  "def": 40,
+  "unit": "°",
+  "desc": "Ángulo de caída: motores off."
+ },
+ {
+  "key": "rearm_angle",
+  "type": "float",
+  "min": 1,
+  "max": 15,
+  "def": 5,
+  "unit": "°",
+  "desc": "Ángulo de reactivación del control."
+ },
+ {
+  "key": "mpu_dlpf",
+  "type": "int",
+  "min": 0,
+  "max": 6,
+  "def": 3,
+  "unit": "",
+  "desc": "Filtro del MPU6050: 0=256, 1=188, 2=98, 3=42, 4=20, 5=10, 6=5 Hz."
+ },
+ {
+  "key": "gyro_deriv",
+  "type": "bool",
+  "min": 0,
+  "max": 1,
+  "def": true,
+  "unit": "",
+  "desc": "Derivada con el giroscopio (-ω) en vez de diferenciar el error."
+ }
+]

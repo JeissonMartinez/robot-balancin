@@ -3,3 +3,11 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# HMI
+hmi/gateway/.venv/
+hmi/gateway/data/
+__pycache__/
+.pytest_cache/
+hmi/web/node_modules/
+hmi/web/dist/

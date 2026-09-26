@@ -1,0 +1,66 @@
+/* Rejilla principal: a la izquierda lo que se mira, a la derecha lo que se toca
+   (mismo criterio que el simulador). En pantallas angostas una sola columna,
+   con conexión y parada de emergencia arriba. */
+main{
+  padding:clamp(10px,2vw,20px);
+  display:grid; gap:16px;
+  grid-template-columns:minmax(0,1fr) 360px;
+  align-items:start;
+  max-width:1680px; margin:0 auto;
+}
+.col{display:flex; flex-direction:column; gap:16px; min-width:0}
+@media (max-width:1080px){
+  main{grid-template-columns:minmax(0,1fr); gap:12px}
+  .col{gap:12px}
+  .col.side{order:-1}
+}
+
+/* ===================== parada de emergencia ===================== */
+.safety{display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:8px}
+.btn.estop{
+  background:var(--rojo); border-color:var(--rojo); color:#fff; font-size:15px; letter-spacing:.06em;
+  text-transform:uppercase; min-height:48px; font-weight:600;
+}
+.btn.estop:hover:not(:disabled){filter:brightness(1.08); border-color:var(--rojo)}
+.btn.arm{min-height:48px}
+.safety-note{font-size:11px; color:var(--ink-3)}
+@media (hover:none){ .hint-teclado{display:none} }
+
+/* ===================== trazas ===================== */
+.plots{display:flex; flex-direction:column; gap:4px; padding:6px 4px 8px}
+.plot{position:relative; min-width:0}
+.plot-title{
+  display:flex; align-items:baseline; gap:8px; padding:0 9px;
+  font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);
+}
+.plot-title .u{letter-spacing:0; text-transform:none}
+
+/* uPlot en los colores del tema */
+.uplot{font-family:inherit}
+.uplot .u-legend{font-size:11.5px; color:var(--ink-2); text-align:left; padding:0 6px}
+.uplot .u-legend .u-marker{width:12px; height:3px; border-radius:2px; border-width:0 !important}
+.uplot .u-legend .u-series{padding:1px 6px}
+.uplot .u-legend .u-series.u-off > *{opacity:.35}
+.uplot .u-legend th{font-weight:400}
+.uplot .u-legend td{font-family:"JetBrains Mono","SFMono-Regular",Menlo,monospace; font-variant-numeric:tabular-nums; font-size:11px}
+.uplot .u-select{background:color-mix(in srgb,var(--azul) 12%,transparent)}
+.uplot .u-cursor-x, .uplot .u-cursor-y{border-color:var(--ink-3) !important}
+
+/* ===================== registro ===================== */
+.log{
+  max-height:260px; overflow:auto; font-size:11.5px; line-height:1.45;
+  display:flex; flex-direction:column; gap:1px; padding:6px 0;
+}
+.log .ln{display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:8px; padding:1px 13px}
+.log .ln .ts{color:var(--ink-3)}
+.log .ln .k{color:var(--ink-3); text-transform:uppercase; font-size:9.5px; letter-spacing:.1em; padding-top:2px}
+.log .ln .m{overflow-wrap:anywhere}
+.log .ln.bad .m{color:var(--rojo)}
+.log .ln.cmd .m{color:var(--azul)}
+.log .vacio{padding:6px 13px; color:var(--ink-3)}
+
+.kv{display:grid; grid-template-columns:auto minmax(0,1fr); gap:3px 12px; font-size:12px}
+.kv dt{color:var(--ink-3)}
+.kv dd{margin:0; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+footer.pie{max-width:1680px; margin:0 auto; padding:4px clamp(10px,2vw,20px) 22px; font-size:11px; color:var(--ink-3)}

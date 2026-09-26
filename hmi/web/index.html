@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#063266">
+<title>Laboratorio del balancín</title>
+<link rel="icon" href="/logos/mecatronica.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Questrial&family=JetBrains+Mono:wght@400;600&display=swap">
+<script>
+  // Antes de pintar: aplica el tema guardado para que no parpadee.
+  try { const t = localStorage.getItem('tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="marcas">
+    <img class="logo" id="logoUni" src="/logos/universidad.png" alt="Universidad de Pamplona">
+    <img class="logo" id="logoMec" src="/logos/mecatronica.png" alt="Programa de Ingeniería Mecatrónica">
+  </div>
+
+  <div class="titulo">
+    <div class="eyebrow">Control Inteligente II · 168418 · Laboratorio</div>
+    <h1>Laboratorio del balancín</h1>
+    <div class="sub">Monitoreo, sintonía y registro del prototipo real (ESP32-S3): telemetría a 50 Hz, parámetros en vivo y base de datos local de cada sesión.</div>
+  </div>
+
+  <div class="autoria">
+    <div class="rot">Autor</div>
+    <div class="nom">Jeisson Harvey Martínez Flórez</div>
+    <div class="det">MsC. en Inteligencia Artificial · Ing. Mecatrónico</div>
+    <div class="det">Docente · Programa de Ingeniería Mecatrónica</div>
+    <a class="mail" href="mailto:jeisson.martinez@unipamplona.edu.co">jeisson.martinez@unipamplona.edu.co</a>
+  </div>
+
+  <button class="btn small" id="btnTema" title="Cambiar entre tema claro, oscuro y el del sistema">Tema</button>
+</header>
+
+<main>
+  <div class="col">
+    <section class="tiles" id="tiles" aria-label="Estado actual"></section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Trazas</h2>
+        <div class="seg" id="segVentana" role="group" aria-label="Ventana de tiempo"></div>
+        <button class="btn small" id="btnPausa" aria-pressed="false">Pausar</button>
+        <span class="hint" id="trazasHint">En pausa: arrastrar para acercar, doble clic para volver.</span>
+      </div>
+      <div class="plots" id="plots"></div>
+    </section>
+  </div>
+
+  <aside class="col side">
+    <section class="card">
+      <div class="card-head"><h2>Seguridad</h2><span class="hint hint-teclado">Tecla <kbd>Esc</kbd> = parada</span></div>
+      <div class="card-body">
+        <div class="safety">
+          <button class="btn estop" id="btnEstop" disabled>Parada</button>
+          <button class="btn arm" id="btnArm" disabled>Armar</button>
+        </div>
+        <div class="safety-note">Parada: motores apagados y sin re-armado automático. Armar: el control se activa al poner el robot vertical.</div>
+      </div>
+    </section>
+
+    <section class="card" id="cardConexion">
+      <div class="card-head"><h2>Conexión</h2><span class="hint" id="conHint"></span></div>
+      <div class="card-body" id="conexion"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Registro</h2><button class="btn small" id="btnLogLimpiar" style="margin-left:auto">Limpiar</button></div>
+      <div class="log mono" id="log"><div class="vacio">Sin eventos.</div></div>
+    </section>
+  </aside>
+</main>
+
+<footer class="pie">Gateway local · HMI v0.1 · <a href="https://github.com/JeissonMartinez/robot-balancin" target="_blank" rel="noopener">repositorio</a></footer>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

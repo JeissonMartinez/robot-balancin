@@ -1,0 +1,81 @@
+/* Tokens de color y tema, copiados del Simulador_Balancin (misma identidad visual).
+   Tema: automático por el sistema, o forzado con <html data-theme="light|dark">. */
+:root{
+  color-scheme: light;
+  --ground:#EEF1F5;      /* gris frío, sesgado hacia el azul institucional */
+  --surface:#FFFFFF;
+  --surface-2:#F6F8FA;
+  --sunken:#E4E9EF;
+  --line:#D3DAE3;
+  --line-soft:#E5EAF0;
+  --ink:#12171F;
+  --ink-2:#4C5768;
+  --ink-3:#778394;
+  --rojo:#AD3332;
+  --azul:#063266;
+  --azul-claro:#2E6BAE;
+  --dorado:#EEC75C;
+  --morado:#3B2C69;
+  --verde:#1C7A5B;
+  --ambar:#B37417;
+  --scene-sky:#F3F5F8;
+  --scene-floor:#DCE2EA;
+  --scene-line:#B9C3D0;
+  --chasis:#8C97A6;
+  --shadow:0 1px 2px rgba(18,23,31,.06), 0 8px 24px -16px rgba(18,23,31,.28);
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --ground:#0E1218;
+    --surface:#161C25;
+    --surface-2:#1B222C;
+    --sunken:#10151C;
+    --line:#2A3341;
+    --line-soft:#212a36;
+    --ink:#E7ECF4;
+    --ink-2:#A7B3C4;
+    --ink-3:#7B8899;
+    --rojo:#E0645F;
+    --azul:#7FAEE6;
+    --azul-claro:#9CC3F0;
+    --dorado:#EEC75C;
+    --morado:#A292D8;
+    --verde:#4FBF95;
+    --ambar:#E0A245;
+    --scene-sky:#131923;
+    --scene-floor:#1A222D;
+    --scene-line:#33404F;
+    --chasis:#7A8797;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px -18px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --ground:#0E1218; --surface:#161C25; --surface-2:#1B222C; --sunken:#10151C;
+  --line:#2A3341; --line-soft:#212a36; --ink:#E7ECF4; --ink-2:#A7B3C4; --ink-3:#7B8899;
+  --rojo:#E0645F; --azul:#7FAEE6; --azul-claro:#9CC3F0; --dorado:#EEC75C; --morado:#A292D8;
+  --verde:#4FBF95; --ambar:#E0A245;
+  --scene-sky:#131923; --scene-floor:#1A222D; --scene-line:#33404F; --chasis:#7A8797;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px -18px rgba(0,0,0,.9);
+}
+
+/* Series de las trazas: paleta categórica validada (skill dataviz, orden fijo, CVD-safe).
+   Los tokens institucionales (--azul, --morado) son demasiado oscuros para líneas de datos.
+   Validación: series 1-5 pasan en claro (#FFFFFF) y oscuro (#161C25); en claro 3-5 quedan
+   bajo 3:1, compensado con la leyenda visible con valores. */
+:root{
+  --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100; --series-5:#e87ba4;
+  --marker:#778394;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500; --series-5:#d55181;
+    --marker:#7B8899;
+  }
+}
+:root[data-theme="dark"]{
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500; --series-5:#d55181;
+  --marker:#7B8899;
+}

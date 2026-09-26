@@ -4,7 +4,9 @@ Laboratorio de pruebas, análisis y monitoreo del prototipo real. Este documento
 arquitectura, el alcance de cada fase y el criterio con que se da por terminada. Se actualiza al cerrar
 cada fase.
 
-Estado: **F0 cerrada y validada en el robot** (2026-09-26): `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída. Rama de trabajo: `feat/hmi`.
+Estado (2026-09-26):
+- **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
+- **F1 implementada**: gateway probado con el robot real por USB (fw 0.2.0: 50.4 Hz, 0 tramas perdidas, sesión en SQLite) y la HMI completa con el robot simulado. Falta la prueba de la HMI con el robot y el fw 0.3.0 cargado. Rama de trabajo: `feat/hmi`.
 
 ---
 
@@ -40,6 +42,10 @@ Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno
 | 2026-09-26 | `structure` se puede cambiar con el robot controlando: el controlador se reinicia en ese ciclo (antes: sólo con el robot inactivo). |
 | 2026-09-26 | Claves del protocolo en minúsculas (`kd_angle`, `kp_v`, ...); la equivalencia con `config.h` está en PROTOCOLO.md §4. |
 | 2026-09-26 | `save` pausa el control mientras escribe en NVS, igual que la calibración. |
+| 2026-09-26 | Telemetría con `uP`, `uI`, `uD` (aporte de cada término al PWM), fw 0.3.0. |
+| 2026-09-26 | Transporte `demo` en el gateway: robot simulado con el mismo protocolo, para desarrollar y practicar sin hardware. |
+| 2026-09-26 | Nueva sesión en SQLite también cuando el robot se reinicia, para que `t_ms` no retroceda dentro de una sesión. |
+| 2026-09-26 | Colores de las trazas: paleta categórica validada para daltonismo (`--series-1..5`), no los colores institucionales. |
 
 ---
 
@@ -165,13 +171,16 @@ Balancin-ControlRN/
 ├── src/, include/, lib/          firmware (sin cambio de ubicación)
 ├── docs/hmi/
 │   ├── PLAN.md                   este documento
-│   └── PROTOCOLO.md              fase 0
+│   ├── PROTOCOLO.md              robot ↔ gateway
+│   └── GATEWAY.md                gateway ↔ HMI (REST, WebSocket, sesiones)
 └── hmi/
+    ├── README.md                 instalación y uso
     ├── gateway/                  Python + FastAPI
-    │   ├── app/                  API REST, WebSocket hacia la HMI
-    │   ├── transports/           serial.py, websocket.py, mqtt.py
-    │   ├── storage/              SQLite
+    │   ├── app/                  main.py (REST + WS), robot.py (enlace), hub.py
+    │   │   ├── transports/       serial_port.py, demo.py; F4 websocket, F5 mqtt
+    │   │   └── storage/          db.py (SQLite)
     │   └── tests/
+    ├── tools/                    protocol_check.py
     ├── web/                      TypeScript + Vite
     │   ├── src/core/             cliente WS, estado, tipos del protocolo
     │   ├── src/ui/               header, tema, paneles, sliders
@@ -190,7 +199,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 | Fase | Contenido | Se da por terminada cuando |
 |---|---|---|
 | **F0** ✅ | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS; `hmi/tools/protocol_check.py`. | Desde el monitor serie se cambia `kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. `protocol_check.py --save` sin fallas. |
-| **F1** | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
+| **F1** ✅ código · ⏳ robot | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
 | **F2** | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
 | **F3** | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
 | **F4** | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |

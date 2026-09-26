@@ -262,3 +262,9 @@ Más detalle en [Doc_Technical.md](Doc_Technical.md).
 ## 🖥️ HMI (en desarrollo)
 
 Laboratorio web para monitorear, sintonizar y registrar el robot desde el PC o el celular. Plan, decisiones y fases en [docs/hmi/PLAN.md](docs/hmi/PLAN.md).
+
+Hoy: conexión por USB (o robot simulado), trazas a 50 Hz con marcas de eventos, parada de emergencia y registro de cada sesión en SQLite. Instalación y uso en [hmi/README.md](hmi/README.md).
+
+```bash
+cd hmi/gateway && .venv/bin/python -m app   # y abrir http://127.0.0.1:8000
+```

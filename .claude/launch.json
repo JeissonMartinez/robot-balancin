@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hmi-gateway",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd hmi/gateway && .venv/bin/python -m app --port 8000"],
+      "port": 8000
+    }
+  ]
+}

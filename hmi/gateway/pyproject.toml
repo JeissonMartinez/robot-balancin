@@ -1,0 +1,16 @@
+[project]
+name = "balancin-gateway"
+version = "0.1.0"
+description = "Gateway local de la HMI del robot balancín: robot ↔ HMI web, SQLite"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
