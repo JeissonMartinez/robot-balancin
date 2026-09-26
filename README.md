@@ -1,6 +1,6 @@
 # 🤖 Balancín-ControlRN (ESP32-S3)
 
-Basado en repositorio: git@github.com:eatechnology1/Balancin-ControlRN.git 
+> Basado en repositorio: `git@github.com:eatechnology1/Balancin-ControlRN.git`
 
 Firmware para un **robot balancín** (péndulo invertido sobre dos ruedas) basado en **ESP32-S3**. Su único objetivo es mantener el robot de pie. Para eso combina:
 
