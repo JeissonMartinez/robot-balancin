@@ -40,7 +40,8 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
       <button class="btn primary" id="btnConectar" type="button" style="flex:1">Conectar</button>
     </div>
     <div class="err" id="conError" hidden></div>
-    <dl class="kv" id="conDatos"></dl>`;
+    <dl class="kv" id="conDatos"></dl>
+    <div class="lan muted" id="conLan"></div>`;
 
   const segBtns = [...root.querySelectorAll<HTMLButtonElement>('.seg button')];
   const serialField = root.querySelector<HTMLElement>('[data-for="serial"]')!;
@@ -49,6 +50,18 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
   const btnConnect = root.querySelector<HTMLButtonElement>('#btnConectar')!;
   const errBox = root.querySelector<HTMLElement>('#conError')!;
   const datos = root.querySelector<HTMLElement>('#conDatos')!;
+  const lan = root.querySelector<HTMLElement>('#conLan')!;
+
+  async function loadInfo() {
+    try {
+      const { lan_urls, port } = await api.info();
+      lan.innerHTML = lan_urls.length
+        ? `Desde el celular (misma WiFi): ${lan_urls.map((u) => `<a class="mono" href="${u}">${u}</a>`).join(' · ')}`
+        : `Sólo accesible desde este PC. Para el celular, arrancar el gateway con <span class="mono">--host 0.0.0.0</span> (puerto ${port}).`;
+    } catch {
+      lan.textContent = '';
+    }
+  }
 
   let kind: Kind = store('transporte') === 'demo' ? 'demo' : 'serial';
   let busy = false;
@@ -133,7 +146,10 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
   gw.on('status', render);
   gw.on('link', (up) => {
     render(gw.status);
-    if (up) loadPorts();
+    if (up) {
+      loadPorts();
+      loadInfo();
+    }
   });
   render(null);
 }

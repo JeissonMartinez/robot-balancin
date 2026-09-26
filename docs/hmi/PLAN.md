@@ -6,7 +6,7 @@ cada fase.
 
 Estado (2026-09-26):
 - **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
-- **F1 implementada**: gateway probado con el robot real por USB (fw 0.2.0: 50.4 Hz, 0 tramas perdidas, sesión en SQLite) y la HMI completa con el robot simulado. Falta la prueba de la HMI con el robot y el fw 0.3.0 cargado. Rama de trabajo: `feat/hmi`.
+- **F1 cerrada y validada en el robot**: fw 0.3.0 por USB, 50.1 Hz, 0 tramas perdidas, parámetros leídos de NVS, sesión en SQLite, marcas de eventos en las trazas; HMI abierta desde el celular por la red local (`--host 0.0.0.0`). Rama de trabajo: `feat/hmi`.
 
 ---
 
@@ -199,7 +199,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 | Fase | Contenido | Se da por terminada cuando |
 |---|---|---|
 | **F0** ✅ | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS; `hmi/tools/protocol_check.py`. | Desde el monitor serie se cambia `kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. `protocol_check.py --save` sin fallas. |
-| **F1** ✅ código · ⏳ robot | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
+| **F1** ✅ | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
 | **F2** | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
 | **F3** | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
 | **F4** | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |

@@ -41,9 +41,17 @@ cd hmi/gateway
 Abrir <http://127.0.0.1:8000>, elegir **USB (serie)** y el puerto del robot (el adaptador USB sale
 primero) y **Conectar**. Sin robot, **Robot simulado** permite probar todo.
 
-- **Desde el celular**: arrancar con `.venv/bin/python -m app --host 0.0.0.0` y abrir
-  `http://<IP del PC>:8000` en la misma red. No hay autenticación: hacerlo sólo en una red de
-  confianza.
+- **Desde el celular** (misma red WiFi que el PC):
+  1. Arrancar con `.venv/bin/python -m app --host 0.0.0.0`. Sin esa opción el gateway sólo acepta
+     conexiones del propio PC.
+  2. Abrir en el celular la dirección que el gateway imprime al arrancar (`HMI en la red:`), con el
+     puerto: `http://192.168.x.x:8000`. La misma dirección aparece en el panel **Conexión**.
+     `127.0.0.1` en el celular es el propio celular, no el PC.
+  3. Si macOS pregunta si Python puede aceptar conexiones entrantes, **Permitir**. Si no abre,
+     revisar Ajustes → Red → Firewall, y que la red no sea de invitados (suelen aislar equipos).
+  4. No hay autenticación: hacerlo sólo en una red de confianza.
+- Las advertencias `Invalid HTTP request received` en el log son intentos de Safari de abrir la
+  página por HTTPS; no afectan.
 - **Parada de emergencia**: botón rojo o tecla `Esc` (en el PC).
 - El monitor serie de PlatformIO y el gateway no pueden usar el puerto a la vez.
 - Los datos quedan en `hmi/gateway/data/balancin.db` (fuera de git).

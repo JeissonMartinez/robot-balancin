@@ -136,6 +136,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
+  info: () => request<{ host: string; port: number; lan_urls: string[] }>('GET', '/api/info'),
   transports: () => request<{ serial: { ports: SerialPortInfo[]; baud: number } }>('GET', '/api/transports'),
   connect: (transport: 'serial' | 'demo', port?: string) => request<Status>('POST', '/api/connect', { transport, port }),
   disconnect: () => request<Status>('POST', '/api/disconnect'),

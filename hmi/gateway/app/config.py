@@ -20,3 +20,22 @@ class Settings:
 
 
 settings = Settings()
+
+
+def lan_addresses() -> list[str]:
+    """IPv4 de este PC en la red local (para abrir la HMI desde el celular)."""
+    import socket
+
+    addrs = set()
+    try:  # la interfaz con la que se sale a la red (no envía nada)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))
+            addrs.add(s.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            addrs.add(info[4][0])
+    except OSError:
+        pass
+    return sorted(a for a in addrs if not a.startswith("127."))
