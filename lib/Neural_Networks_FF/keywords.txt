@@ -1,0 +1,47 @@
+#######################################
+# Syntax Coloring Map List
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+List	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+Dynamic_Array	KEYWORD2
+Count	KEYWORD2
+Neural_Networks_FF	KEYWORD2
+SIM_NET	     KEYWORD2
+TRAIN_NET	     KEYWORD2
+TRAIN_NET_ONLINE	     KEYWORD2
+FEED_FORWARD_NET 	KEYWORD2
+NORMALIZE_DATA	KEYWORD2
+DATA_CENTERING	KEYWORD2
+STR_to_INT	KEYWORD2
+FunAct	KEYWORD2
+DFunAct	KEYWORD2
+logsig	KEYWORD2
+tansig	KEYWORD2
+purelin	KEYWORD2
+hardlim	KEYWORD2
+poslin_lim	KEYWORD2
+dposlin_limits	KEYWORD2
+dlogsig	KEYWORD2
+dtansig	     KEYWORD2
+dpurelin	     KEYWORD2
+dhardlim	KEYWORD2
+dposlin_lim	KEYWORD2
+EPOCHS	KEYWORD2
+ERROR_C_M	KEYWORD2
+maximo	KEYWORD2
+minimo	KEYWORD2
+Ysim	KEYWORD2
+y	KEYWORD2
+LearningRate	KEYWORD2
+
+
+#######################################
+# Constants (LITERAL1)
+#######################################

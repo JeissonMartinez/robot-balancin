@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #######################################
 # Syntax Coloring Map List
 #######################################
@@ -54,60 +53,3 @@ ToinitializeArray_3D	KEYWORD2
 #######################################
 # Constants (LITERAL1)
 #######################################
-=======
-#######################################
-# Syntax Coloring Map List
-#######################################
-
-#######################################
-# Datatypes (KEYWORD1)
-#######################################
-List	KEYWORD1
-
-#######################################
-# Methods and Functions (KEYWORD2)
-#######################################
-Dynamic_Array	KEYWORD2
-Count	KEYWORD2
-NewArray_1D	KEYWORD2
-IntNewArray_1D	     KEYWORD2
-CharNewArray_1D	     KEYWORD2
-NewArray_2D	KEYWORD2
-NewArray_3D	KEYWORD2
-DeleteArray_1D	KEYWORD2
-IntDeleteArray_1D	KEYWORD2
-CharDeleteArray_1D	KEYWORD2
-DeleteArray_2D	KEYWORD2
-DeleteArray_3D	KEYWORD2
-WriteArray_1D	KEYWORD2
-IntWriteArray_1D 	KEYWORD2
-CharWriteArray_1D 	KEYWORD2
-WriteArray_2D	KEYWORD2
-WriteArray_3D	KEYWORD2
-ReadArray_1D	KEYWORD2
-IntReadArray_1D	     KEYWORD2
-CharReadArray_1D	     KEYWORD2
-ReadArray_2D	KEYWORD2
-ReadArray_3D	KEYWORD2
-GetRows	KEYWORD2
-GetColumns	KEYWORD2
-GetDepth	KEYWORD2
-PrintArray_1D	KEYWORD2
-IntPrintArray_1D	KEYWORD2
-CharPrintArray_1D	KEYWORD2
-PrintArray_2D	KEYWORD2
-PrintArray_3D	KEYWORD2
-freeRam 	KEYWORD2
-MaxArray_1D	KEYWORD2
-IntMaxArray_1D	KEYWORD2
-MaxArray_2D	KEYWORD2
-ToinitializeArray_1D	KEYWORD2
-IntToinitializeArray_1D	KEYWORD2
-CharToinitializeArray_1D	KEYWORD2
-ToinitializeArray_2D	KEYWORD2
-ToinitializeArray_3D	KEYWORD2
-
-#######################################
-# Constants (LITERAL1)
-#######################################
->>>>>>> ec42d93 (Inicial all)
