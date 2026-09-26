@@ -21,6 +21,8 @@ Firmware para un **robot balancín** (péndulo invertido sobre dos ruedas) basad
 - 🕒 **FreeRTOS**: `TaskBalanceo` a 50 Hz en el núcleo 1, con período fijo (`vTaskDelayUntil`) y `dt` medido.
 - 🛡️ **Seguridad**: motores apagados si |ángulo| > 40°; se reactivan con el robot vertical (|ángulo| < 5°).
 - 💾 **Calibración persistente** de la MPU en memoria no volátil (NVS), sin interrumpir una lectura I2C.
+- 🎚️ **Parámetros ajustables en ejecución** (ganancias, estructura, RN, zona muerta, seguridad) por comandos JSON, validados y guardables en NVS. Base de la [HMI](#️-hmi-en-desarrollo).
+- 🛑 **Parada de emergencia** remota.
 
 ---
 
@@ -43,7 +45,7 @@ flowchart TD
     H -- "No · sigue caído" --> T
     H -- "Sí · vertical" --> I[Reiniciar integrales y filtros<br/>habilitar motores]
     I --> J
-    F -- No --> J{CONTROL_STRUCTURE}
+    F -- No --> J{structure}
     G --> T
     J -- SpeedOuter --> K[Lazo de velocidad PI · 10 Hz<br/>→ ángulo deseado θref]
     K --> L[Red neuronal ajusta Kp]
@@ -133,13 +135,15 @@ Los motorreductores (1:119) se comportan casi como fuentes de velocidad. Con el 
 
 | Archivo | Contenido |
 |---|---|
-| `src/main.cpp` | `setup()` y `loop()`: inicialización, botón de calibración, comandos y telemetría por Serial. |
-| `include/config.h` | Pines, PWM, encoders, estructura de control y todos los parámetros ajustables. |
+| `src/main.cpp` | `setup()` y `loop()`: inicialización, botón de calibración, lectura del Serial (teclas y líneas JSON) y envío de telemetría. |
+| `include/config.h` | Pines, PWM, encoders y valores de fábrica de los parámetros ajustables. |
+| `params.h/.cpp` | Parámetros activos en RAM: validación, cambio en ejecución, NVS y descripción (`schema`). |
+| `protocol.h/.cpp` | Protocolo con la HMI: comandos JSON, respuestas y formato de telemetría ([PROTOCOLO.md](docs/hmi/PROTOCOLO.md)). |
 | `encoders.h/.cpp` | ISRs de encoders (IRAM-safe), lectura atómica y RPM filtradas. |
 | `motors.h/.cpp` | PWM LEDC, driver TB6612FNG y compensación de zona muerta. |
 | `mpu_block.h/.cpp` | MPU6050: conexión, filtro pasa-bajas, calibración en NVS y filtro complementario. |
 | `nn_cascade_block.h/.cpp` | Red neuronal, las dos estructuras de control y sus ganancias. |
-| `tasks_block.h/.cpp` | `TaskBalanceo`, seguridad, pausa y reanudación, y telemetría. |
+| `tasks_block.h/.cpp` | `TaskBalanceo`, seguridad, parada de emergencia, pausa y reanudación, y cola de telemetría (50 Hz). |
 | `motor_test.h/.cpp` | Prueba de zona muerta de los motores (comando `d`). |
 | `lib/Neural_Networks_FF`, `lib/Dynamic_Array` | Librerías locales de la red neuronal. |
 
@@ -149,18 +153,22 @@ En `test/` se guardan sketches y versiones anteriores (`*.old`) como histórico;
 
 ## 🎛️ Parámetros de ajuste
 
-| Parámetro | Dónde | Valor | Qué hace |
+Los valores de `config.h` son los **de fábrica**. En ejecución se cambian con el comando `set` (por Serial hoy, desde la HMI después) y se guardan con `save` en NVS. Si hay parámetros guardados, **al arrancar mandan sobre `config.h`**; para volver a fábrica: `defaults` y `save`. Lista completa, rangos y reglas en [PROTOCOLO.md §4](docs/hmi/PROTOCOLO.md#4-parámetros).
+
+| Clave | Constante (`config.h`) | Fábrica | Qué hace |
 |---|---|---|---|
-| `CONTROL_STRUCTURE` | `config.h` | `SpeedOuter` | Estructura de control activa (`SpeedOuter` / `AngleOuter`). |
-| `KP_MIN`, `KP_MAX` | `config.h` | 70 / 70 | Rango de `Kp` que puede elegir la red. Iguales = `Kp` fija. |
-| `Kd_angle` | `nn_cascade_block.cpp` | 1.25 | Acción derivativa del lazo de ángulo (amortigua). |
-| `Kp_v`, `Ki_v` | `nn_cascade_block.cpp` | 0.05 / 0.03 | Ganancias del lazo de velocidad (`SpeedOuter`). |
-| `SPEED_LOOP_SIGN` | `config.h` | −1 | Signo del lazo de velocidad. |
-| `MAX_TILT_REF_DEG` | `config.h` | 4° | Límite del ángulo deseado que puede pedir el lazo de velocidad. |
-| `Ki_angle`, `Kp_speed`, `Ki_speed` | `nn_cascade_block.cpp` | 1.0 / 0.8 / 0 | Ganancias de `AngleOuter`. |
-| `PWM_DEADBAND` | `config.h` | 14 | Compensación de zona muerta (0 = desactivada). |
-| `MPU_DLPF_MODE` | `config.h` | 3 (42 Hz) | Filtro pasa-bajas interno del MPU6050. |
-| `MAX_ANGLE`, `REARM_ANGLE` | `config.h` | 40° / 5° | Ángulo de caída y de reactivación. |
+| `structure` | `CONTROL_STRUCTURE` | `SpeedOuter` | Estructura de control activa (`SpeedOuter` / `AngleOuter`). |
+| `kp_min`, `kp_max` | `KP_MIN`, `KP_MAX` | 70 / 70 | Rango de `Kp` que puede elegir la red. Iguales = `Kp` fija. |
+| `kd_angle` | `KD_ANGLE` | 1.25 | Acción derivativa del lazo de ángulo (amortigua). |
+| `kp_v`, `ki_v` | `KP_V`, `KI_V` | 0.05 / 0.03 | Ganancias del lazo de velocidad (`SpeedOuter`). |
+| `speed_sign` | `SPEED_LOOP_SIGN` | −1 | Signo del lazo de velocidad. |
+| `max_tilt_ref` | `MAX_TILT_REF_DEG` | 4° | Límite del ángulo deseado que puede pedir el lazo de velocidad. |
+| `ki_angle`, `kp_speed`, `ki_speed` | `KI_ANGLE`, `KP_SPEED`, `KI_SPEED` | 1.0 / 0.8 / 0 | Ganancias de `AngleOuter`. |
+| `pwm_deadband` | `PWM_DEADBAND` | 14 | Compensación de zona muerta (0 = desactivada). |
+| `mpu_dlpf` | `MPU_DLPF_MODE` | 3 (42 Hz) | Filtro pasa-bajas interno del MPU6050. |
+| `max_angle`, `rearm_angle` | `MAX_ANGLE`, `REARM_ANGLE` | 40° / 5° | Ángulo de caída y de reactivación. |
+
+Pines, PWM, encoders y período de control siguen fijos en `config.h`.
 
 **Guía rápida con `SpeedOuter`**:
 - Si el robot se aleja cada vez más rápido y `Ref` se queda en ±4°, cambia `SPEED_LOOP_SIGN`.
@@ -188,12 +196,14 @@ Los pines están fijados por la PCB. GPIO 3 y 46 son pines de arranque (*strappi
 
 ## 🧮 Uso
 
-1. **Encendido**: se inician los motores (deshabilitados), la MPU6050 y su calibración, los encoders, la red neuronal y la tarea de control. Se imprime la estructura de control activa.
+1. **Encendido**: se cargan los parámetros (NVS o fábrica) y se inician los motores (deshabilitados), la MPU6050 y su calibración, los encoders, la red neuronal y la tarea de control. Se imprime la versión, el origen de los parámetros y la estructura de control activa.
 2. **Activación**: pon el robot vertical (|ángulo| < 5°) y el control se activa solo.
 3. **Caída**: si |ángulo| > 40°, se apagan los motores hasta que vuelva a estar vertical.
 4. **Calibración**: con el robot quieto y vertical, pulsa y suelta `BTN_CAL` o envía `c`. El control se pausa, se guardan los offsets y se reanuda.
 
-### Telemetría (Serial, 115200 baudios, cada 100 ms)
+### Telemetría (Serial, 921600 baudios)
+
+Por defecto sale en texto cada 100 ms (legible en el monitor). Con `j` o el comando `tel` pasa a JSON a 50 Hz, que es lo que usa la HMI ([formato](docs/hmi/PROTOCOLO.md#tel--telemetría)).
 
 ```
 Ang: 0.53 | Ref: -0.21 | w: -4.2 | PWM: -12.4 | RPM L: 0.0 | RPM R: -2.9 | Kp: 70.00 | dt: 0.0200 | ACTIVO
@@ -208,6 +218,7 @@ Ang: 0.53 | Ref: -0.21 | w: -4.2 | PWM: -12.4 | RPM L: 0.0 | RPM R: -2.9 | Kp: 7
 | `RPM L` / `RPM R` | Velocidad de cada rueda. Positiva = avance. |
 | `Kp` | `Kp` actual del lazo de ángulo. |
 | `dt` | Período real del ciclo de control (s). |
+| Estado | `ACTIVO`, `MOTORES OFF` (caído o esperando vertical) o `PARADA DE EMERGENCIA`. |
 
 ### Comandos por el monitor serie
 
@@ -218,9 +229,15 @@ Escribe la letra en el monitor (no hace falta Enter):
 | `d` | Prueba de zona muerta. Sujeta el robot vertical con las ruedas en el suelo: sube el PWM hasta que la rueda derecha gira de forma sostenida e imprime el PWM mínimo en cada sentido. Cualquier tecla la aborta. |
 | `c` | Calibrar la MPU (igual que el botón). |
 | `t` | Pausar o reanudar la telemetría. |
+| `j` | Alternar telemetría JSON a 50 Hz / texto a 10 Hz. |
+| `e` | Parada de emergencia: motores off y sin re-armado automático. |
+| `a` | Liberar la parada de emergencia. |
+| `p` | Mostrar los parámetros activos (JSON). |
 | `?` | Ayuda. |
 
 `d` y `c` pausan el control antes de actuar. Al terminar, el control se reactiva cuando el robot se pone vertical.
+
+Una línea que empieza con `{` es un comando JSON (`set`, `get`, `save`, `schema`, ...), descrito en [PROTOCOLO.md](docs/hmi/PROTOCOLO.md). Ejemplo: `{"type":"cmd","id":1,"cmd":"set","params":{"kd_angle":1.3}}`.
 
 ---
 
@@ -230,11 +247,13 @@ Escribe la letra en el monitor (no hace falta Enter):
 git clone https://github.com/eatechnology1/Balancin-ControlRN.git
 cd Balancin-ControlRN
 pio run -t upload
-pio device monitor -b 115200
+pio device monitor
 ```
 
 - Si la carga falla con `Wrong boot mode`, mantén pulsado **BOOT** al empezar la carga (hasta que aparezca `Connecting...` seguido de `Writing`).
-- Las librerías **Neural_Networks_FF** y **Dynamic_Array** están en `lib/` y PlatformIO las detecta automáticamente. La del MPU6050 se descarga desde `lib_deps`.
+- Las librerías **Neural_Networks_FF** y **Dynamic_Array** están en `lib/` y PlatformIO las detecta automáticamente. MPU6050 y ArduinoJson se descargan desde `lib_deps`.
+- El monitor usa 921600 baudios (`monitor_speed` en `platformio.ini` = `SERIAL_BAUD` en `config.h`).
+- Verificar el protocolo con el robot conectado: `~/.platformio/penv/bin/python hmi/tools/protocol_check.py` (añadir `--save` para probar la persistencia en NVS).
 
 Más detalle en [Doc_Technical.md](Doc_Technical.md).
 

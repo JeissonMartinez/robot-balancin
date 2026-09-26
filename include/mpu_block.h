@@ -15,9 +15,13 @@
 
 /**
  * @brief Inicia I2C y el MPU6050.
+ * @param dlpfMode Filtro pasa-bajas interno (0=256 … 6=5 Hz, ver MPU_DLPF_MODE).
  * @return true si el sensor responde (testConnection).
  */
-bool setupMPU();
+bool setupMPU(uint8_t dlpfMode);
+
+/** Cambia el filtro pasa-bajas interno. Usa I2C: llamarla desde TaskBalanceo. */
+void setMPUFilter(uint8_t dlpfMode);
 
 /** @return true si había offsets guardados en NVS y se cargaron. */
 bool loadCalibration();

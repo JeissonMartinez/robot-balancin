@@ -10,22 +10,10 @@ static Dynamic_Array FAC_STR = Dynamic_Array();
 static Dynamic_Array EST = Dynamic_Array();
 static Dynamic_Array posicion = Dynamic_Array();
 
-// ===================== PARÁMETROS ===================================
-float setpoint_angle = 0.0;
-
-float Kp_angle = KP_MIN;
-float Ki_angle = 1.0;
-float Kd_angle = 1.25; // ≈ Kd = 1 de la sintonía manual (PWM ≈ 0.8·salida del lazo de ángulo)
-
-float Kp_speed = 0.8;
-float Ki_speed = 0.0; // Integral de velocidad desactivado hasta verificar encoders
-
-// Lazo externo de velocidad (ControlStructure::SpeedOuter). Ganancia de lazo ≈ 15 RPM/° · Kp_v;
-// con 0.10 era 1.5 (> 1). Ki_v corrige que el cero calibrado no sea el punto de equilibrio real.
-float Kp_v = 0.05;  // [°/RPM]
-float Ki_v = 0.03;  // [°/(RPM·s)]
-
 // ===================== ESTADO =======================================
+// Los parámetros de ajuste llegan en cada llamada (const Params &p, ver params.h).
+static float Kp_angle = KP_MIN; // La reescribe la RN en cada ciclo
+
 static float error = 0.00;
 static float error_1 = 0.00;
 static float error_2 = 0.00;
@@ -42,8 +30,9 @@ static float outer_rpm_sum = 0;
 static float outer_time = 0;
 static int outer_samples = 0;
 
-void initNeural()
+void initNeural(const Params &p)
 {
+  Kp_angle = p.kpMin;
   XI.NewArray_2D(1, 3);
   XI.ToinitializeArray_2D(0.0);
 
@@ -76,12 +65,12 @@ void initNeural()
   net.FEED_FORWARD_NET(EST, FAC_STR);
   posicion.NewArray_2D(1, 1);
   posicion.ToinitializeArray_2D(0.0);
-  net.LearningRate = NN_LEARNING_RATE;
+  net.LearningRate = p.nnLearningRate;
 }
 
-void resetCascade(float angle)
+void resetCascade(const Params &p, float angle)
 {
-  angle_ref = setpoint_angle;
+  angle_ref = p.setpointAngle;
   error = angle_ref - angle;
   error_1 = error;
   error_2 = error;
@@ -96,14 +85,20 @@ void resetCascade(float angle)
 
 float getAngleReference()
 {
-  return (CONTROL_STRUCTURE == ControlStructure::SpeedOuter) ? angle_ref : setpoint_angle;
+  return angle_ref;
+}
+
+float getKpAngle()
+{
+  return Kp_angle;
 }
 
 // RN: ajuste en línea de Kp_angle a partir del error de ángulo actual (común a ambas
 // estructuras). Error de entrenamiento = (|e| - NN_ERROR_BAND)/100: > 0 sube Kp, < 0 la baja.
-static void updateNeuralKp(float dt)
+static void updateNeuralKp(const Params &p, float dt)
 {
-  posicion.WriteArray_2D(0, 0, NN_ERROR_BAND / 100.00);
+  net.LearningRate = p.nnLearningRate;
+  posicion.WriteArray_2D(0, 0, p.nnErrorBand / 100.00);
   XI.WriteArray_2D(0, 0, error);
   XI.WriteArray_2D(0, 1, error - error_1);
   XI.WriteArray_2D(0, 2, error_1 - error_2);
@@ -113,23 +108,23 @@ static void updateNeuralKp(float dt)
   Output = net.y.ReadArray_2D(net.y.GetRows() - 1, 0);
   error_2 = error_1;
   error_1 = error;
-  float kp_target = KP_MIN + (KP_MAX - KP_MIN) * Output;
-  Kp_angle += (dt / (KP_FILTER_TAU + dt)) * (kp_target - Kp_angle);
+  float kp_target = p.kpMin + (p.kpMax - p.kpMin) * Output;
+  Kp_angle += (dt / (p.kpFilterTau + dt)) * (kp_target - Kp_angle);
 }
 
-static float angleDerivative(float angleRate, float dt)
+static float angleDerivative(const Params &p, float angleRate, float dt)
 {
-  return USE_GYRO_DERIVATIVE ? -angleRate : (error - angle_prev_error) / dt;
+  return p.useGyroDerivative ? -angleRate : (error - angle_prev_error) / dt;
 }
 
 // ---------------------------------------------------------------------------------
 // Estructura original: ángulo (PID, externo) -> referencia de velocidad -> PI -> PWM
 // ---------------------------------------------------------------------------------
-static float cascadeAngleOuter(float angleRate, float speed_measured, float dt)
+static float cascadeAngleOuter(const Params &p, float angleRate, float speed_measured, float dt)
 {
   // --- Lazo de ángulo (PID) -> referencia de velocidad ---
-  float derivative = angleDerivative(angleRate, dt);
-  float pid_unsat = Kp_angle * error + Ki_angle * angle_integral + Kd_angle * derivative;
+  float derivative = angleDerivative(p, angleRate, dt);
+  float pid_unsat = Kp_angle * error + p.kiAngle * angle_integral + p.kdAngle * derivative;
 
   float speed_ref = constrain(pid_unsat, -300, 300);
   if (!((pid_unsat != speed_ref) && (error * pid_unsat) > 0))
@@ -141,7 +136,7 @@ static float cascadeAngleOuter(float angleRate, float speed_measured, float dt)
   // --- Lazo de velocidad (PI) -> PWM ---
   float error_speed = speed_ref - speed_measured;
 
-  float pwm_unsat = Kp_speed * error_speed + Ki_speed * speed_integral;
+  float pwm_unsat = p.kpSpeed * error_speed + p.kiSpeed * speed_integral;
   float pwm_balanceo_base = constrain(pwm_unsat, -PWM_LIMIT, PWM_LIMIT);
 
   if (!((pwm_unsat != pwm_balanceo_base) && (error_speed * pwm_unsat) > 0))
@@ -165,7 +160,7 @@ static float cascadeAngleOuter(float angleRate, float speed_measured, float dt)
 // angle_ref = setpoint + SPEED_LOOP_SIGN·(Kp_v·v + Ki_v·∫v), con SPEED_LOOP_SIGN = -1.
 // El término integral (∫v ∝ distancia recorrida) devuelve el robot a su sitio y absorbe la
 // diferencia entre el cero calibrado y el punto de equilibrio real.
-static void updateSpeedLoop(float speed_measured, float dt)
+static void updateSpeedLoop(const Params &p, float speed_measured, float dt)
 {
   outer_rpm_sum += speed_measured;
   outer_time += dt;
@@ -179,40 +174,41 @@ static void updateSpeedLoop(float speed_measured, float dt)
   outer_time = 0;
   outer_samples = 0;
 
-  float v_error = v - SPEED_REF_RPM;
-  float tilt_unsat = SPEED_LOOP_SIGN * (Kp_v * v_error + Ki_v * outer_speed_integral);
-  float tilt = constrain(tilt_unsat, -MAX_TILT_REF_DEG, MAX_TILT_REF_DEG);
+  float v_error = v - p.speedRefRpm;
+  float tilt_unsat = p.speedLoopSign * (p.kpV * v_error + p.kiV * outer_speed_integral);
+  float tilt = constrain(tilt_unsat, -p.maxTiltRefDeg, p.maxTiltRefDeg);
   // Anti-windup: no integrar si está saturado y el error empuja hacia la saturación
-  if (!((tilt_unsat != tilt) && (SPEED_LOOP_SIGN * v_error * tilt_unsat) > 0))
+  if (!((tilt_unsat != tilt) && (p.speedLoopSign * v_error * tilt_unsat) > 0))
   {
     outer_speed_integral += v_error * T;
   }
-  angle_ref = setpoint_angle + tilt;
+  angle_ref = p.setpointAngle + tilt;
 }
 
-static float cascadeSpeedOuter(float angleRate, float speed_measured, float dt)
+static float cascadeSpeedOuter(const Params &p, float angleRate, float speed_measured, float dt)
 {
   // Lazo interno PD de ángulo -> PWM. ANGLE_LOOP_PWM_GAIN = Kp_speed de la estructura
   // original, para que KP_MIN/KP_MAX y Kd_angle signifiquen lo mismo en ambas estructuras.
-  float derivative = angleDerivative(angleRate, dt);
+  float derivative = angleDerivative(p, angleRate, dt);
   angle_prev_error = error;
-  float pwm_unsat = ANGLE_LOOP_PWM_GAIN * (Kp_angle * error + Kd_angle * derivative);
+  float pwm_unsat = ANGLE_LOOP_PWM_GAIN * (Kp_angle * error + p.kdAngle * derivative);
   return constrain(pwm_unsat, -PWM_LIMIT, PWM_LIMIT);
 }
 
-float cascada(float angle, float angleRate, float rpmLeft, float rpmRight, float dt)
+float cascada(const Params &p, float angle, float angleRate, float rpmLeft, float rpmRight, float dt)
 {
   float speed_measured = USE_LEFT_ENCODER ? (rpmLeft + rpmRight) * 0.5f : rpmRight;
 
-  if (CONTROL_STRUCTURE == ControlStructure::SpeedOuter)
+  if (p.structure == ControlStructure::SpeedOuter)
   {
-    updateSpeedLoop(speed_measured, dt);
+    updateSpeedLoop(p, speed_measured, dt);
     error = angle_ref - angle;
-    updateNeuralKp(dt);
-    return cascadeSpeedOuter(angleRate, speed_measured, dt);
+    updateNeuralKp(p, dt);
+    return cascadeSpeedOuter(p, angleRate, speed_measured, dt);
   }
 
-  error = setpoint_angle - angle;
-  updateNeuralKp(dt);
-  return cascadeAngleOuter(angleRate, speed_measured, dt);
+  angle_ref = p.setpointAngle;
+  error = angle_ref - angle;
+  updateNeuralKp(p, dt);
+  return cascadeAngleOuter(p, angleRate, speed_measured, dt);
 }

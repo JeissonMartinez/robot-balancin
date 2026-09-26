@@ -24,14 +24,15 @@ void setupMotors();
 void driveMotorsDifferential(float pwmL, float pwmR);
 
 /**
- * @brief Compensa la zona muerta del motor (PWM_DEADBAND) de forma continua.
+ * @brief Compensa la zona muerta del motor de forma continua.
  *
  * |u| >= PWM_DEADBAND_BLEND: salida = signo(u)·(DB + |u|·(255 - DB)/255).
  * |u| <  PWM_DEADBAND_BLEND: interpolación lineal desde 0 hasta ese punto (sin salto en 0).
  * @param pwm Salida del controlador, -255..255.
+ * @param deadband DB, PWM que vence la fricción (0 = sin compensación).
  * @return PWM a aplicar al motor, -255..255.
  */
-float compensateDeadband(float pwm);
+float compensateDeadband(float pwm, float deadband);
 
 /** Pone STBY en HIGH (habilita el puente H). */
 void enableMotors();

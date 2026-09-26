@@ -61,18 +61,18 @@ void driveMotorsDifferential(float pwmL, float pwmR)
   setMotor(BIN1, BIN2, CH_B, pwmR); // Motor derecho
 }
 
-float compensateDeadband(float pwm)
+float compensateDeadband(float pwm, float deadband)
 {
-  if (PWM_DEADBAND <= 0.0f)
+  if (deadband <= 0.0f)
     return pwm;
 
-  const float scale = (255.0f - PWM_DEADBAND) / 255.0f;
+  const float scale = (255.0f - deadband) / 255.0f;
   float mag = fabsf(pwm);
   float out;
   if (mag >= PWM_DEADBAND_BLEND)
-    out = PWM_DEADBAND + mag * scale;
+    out = deadband + mag * scale;
   else
-    out = mag * (PWM_DEADBAND + PWM_DEADBAND_BLEND * scale) / PWM_DEADBAND_BLEND;
+    out = mag * (deadband + PWM_DEADBAND_BLEND * scale) / PWM_DEADBAND_BLEND;
 
   return (pwm >= 0.0f) ? out : -out;
 }

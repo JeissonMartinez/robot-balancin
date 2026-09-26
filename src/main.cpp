@@ -5,10 +5,9 @@
 #include "motors.h"
 #include "mpu_block.h"
 #include "nn_cascade_block.h"
+#include "params.h"
+#include "protocol.h"
 #include "tasks_block.h"
-#include "motor_test.h"
-
-static bool telemetryEnabled = true;
 
 // Devuelve true una vez por pulsación: LOW estable BTN_DEBOUNCE_MS y luego soltado.
 static bool calibrationButtonPressed()
@@ -23,14 +22,6 @@ static bool calibrationButtonPressed()
   return true;
 }
 
-static void printTelemetry()
-{
-  Telemetry t;
-  getTelemetry(t);
-  Serial.printf("Ang: %.2f | Ref: %.2f | w: %.1f | PWM: %.1f | RPM L: %.1f | RPM R: %.1f | Kp: %.2f | dt: %.4f | %s\n",
-                t.angle, t.angleRef, t.rate, t.pwm, t.rpmL, t.rpmR, t.kp, t.dt, t.active ? "ACTIVO" : "MOTORES OFF");
-}
-
 static void printHelp()
 {
   Serial.println();
@@ -38,51 +29,59 @@ static void printHelp()
   Serial.println("  d  prueba de zona muerta de motores");
   Serial.println("  c  calibrar MPU (igual que el botón)");
   Serial.println("  t  pausar / reanudar la telemetría");
+  Serial.println("  j  telemetría en JSON a 50 Hz / en texto a 10 Hz");
+  Serial.println("  e  parada de emergencia (motores off, no se re-arma)");
+  Serial.println("  a  liberar la parada de emergencia");
+  Serial.println("  p  mostrar los parámetros activos (JSON)");
   Serial.println("  ?  esta ayuda");
+  Serial.println("Las líneas que empiezan con '{' son comandos JSON (docs/hmi/PROTOCOLO.md).");
 }
 
-// Detiene el control, ejecuta la acción y lo reanuda. Devuelve false si no se pudo pausar.
-static bool runWithControlPaused(void (*action)())
+static void reportPaused(bool ok)
 {
-  if (!pauseControl())
-  {
-    Serial.println(">> ERROR: la tarea de control no se detuvo. Acción cancelada.");
-    resumeControl();
-    return false;
-  }
-  action();
-  resumeControl();
-  Serial.println(">> Control reanudado (se activa al poner el robot vertical).");
-  return true;
+  Serial.println(ok ? ">> Control reanudado (se activa al poner el robot vertical)."
+                    : ">> ERROR: la tarea de control no se detuvo. Acción cancelada.");
 }
 
-static void calibrate()
+static void handleKey(char cmd)
 {
-  Serial.println(">> Iniciando calibración MPU (robot quieto y vertical)...");
-  calibrateMPU();
-  Serial.println(">> Calibración MPU completa.");
-}
-
-static void handleSerialCommand()
-{
-  if (!Serial.available())
-    return;
-  char cmd = Serial.read();
-
   switch (cmd)
   {
   case 'd':
   case 'D':
-    runWithControlPaused(runDeadbandTest);
+    reportPaused(runDeadband());
     break;
   case 'c':
   case 'C':
-    runWithControlPaused(calibrate);
+    reportPaused(runCalibration());
     break;
   case 't':
   case 'T':
-    telemetryEnabled = !telemetryEnabled;
-    Serial.println(telemetryEnabled ? ">> Telemetría reanudada." : ">> Telemetría en pausa.");
+    telemetryOutput().enabled = !telemetryOutput().enabled;
+    Serial.println(telemetryOutput().enabled ? ">> Telemetría reanudada." : ">> Telemetría en pausa.");
+    break;
+  case 'j':
+  case 'J':
+  {
+    TelemetryOutput &o = telemetryOutput();
+    o.json = !o.json;
+    o.div = o.json ? 1 : TELEMETRY_DIV_DEFAULT;
+    Serial.println(o.json ? ">> Telemetría JSON a 50 Hz." : ">> Telemetría en texto a 10 Hz.");
+    break;
+  }
+  case 'e':
+  case 'E':
+    setEStop(true);
+    Serial.println(">> PARADA DE EMERGENCIA. Enviar 'a' para liberar.");
+    break;
+  case 'a':
+  case 'A':
+    setEStop(false);
+    Serial.println(">> Parada liberada. El control se activa al poner el robot vertical.");
+    break;
+  case 'p':
+  case 'P':
+    protocolWriteParams(Serial);
     break;
   case '?':
   case 'h':
@@ -94,14 +93,74 @@ static void handleSerialCommand()
   }
 }
 
+// Separa la entrada del Serial: una línea que empieza con '{' es un comando JSON (hasta
+// '\n'); cualquier otro carácter suelto es una tecla.
+static void pollSerial()
+{
+  static char line[1024];
+  static size_t len = 0;
+  static bool inJson = false;
+  static bool overflow = false;
+
+  while (Serial.available())
+  {
+    char c = Serial.read();
+    if (!inJson)
+    {
+      if (c == '{')
+      {
+        inJson = true;
+        overflow = false;
+        line[0] = c;
+        len = 1;
+      }
+      else
+        handleKey(c);
+      continue;
+    }
+
+    if (c == '\n' || c == '\r')
+    {
+      inJson = false;
+      if (overflow)
+      {
+        Serial.println("{\"type\":\"ack\",\"id\":null,\"ok\":false,\"err\":\"línea demasiado larga\"}");
+        continue;
+      }
+      line[len] = '\0';
+      protocolHandleLine(line, Serial);
+    }
+    else if (len < sizeof(line) - 1)
+      line[len++] = c;
+    else
+      overflow = true;
+  }
+}
+
+static void pumpTelemetry()
+{
+  Telemetry t;
+  const TelemetryOutput &o = telemetryOutput();
+  while (receiveTelemetry(t))
+  {
+    if (o.enabled && t.seq % o.div == 0)
+      protocolWriteTelemetry(t, Serial, o.json);
+  }
+}
+
 void setup()
 {
-  Serial.begin(115200);
+  Serial.setRxBufferSize(1024);
+  Serial.begin(SERIAL_BAUD);
+
+  paramsInit();
+  Params p;
+  paramsSnapshot(p);
 
   setupMotors();
   pinMode(BTN_CAL, INPUT_PULLUP);
 
-  if (!setupMPU())
+  if (!setupMPU(p.mpuDlpfMode))
   {
     Serial.println(">> ERROR: MPU6050 no responde. Revisar cableado I2C (SDA 41, SCL 42).");
     while (true)
@@ -114,17 +173,20 @@ void setup()
     Serial.println(">> No existe calibración guardada. Necesitas presionar el botón.");
 
   setupEncoders();
-  initNeural();
+  initNeural(p);
   resetAngleFromAccel();
 
   startControlTask();
 
+  Serial.printf("Firmware %s · protocolo v%d\n", FW_VERSION, PROTOCOL_VERSION);
+  Serial.printf("Parámetros: %s\n", paramsLoadedFromNvs() ? "guardados en NVS" : "de fábrica (config.h)");
   Serial.printf("Estructura de control: %s\n",
-                CONTROL_STRUCTURE == ControlStructure::SpeedOuter
+                p.structure == ControlStructure::SpeedOuter
                     ? "SpeedOuter (velocidad -> angulo -> PWM)"
                     : "AngleOuter (angulo -> velocidad -> PWM)");
   Serial.println("Robot listo. Ponlo vertical para activar el control; botón = calibrar MPU.");
   printHelp();
+  protocolHello(Serial);
 }
 
 void loop()
@@ -132,16 +194,10 @@ void loop()
   if (calibrationButtonPressed())
   {
     Serial.println(">> Botón presionado. Deteniendo robot para calibrar...");
-    runWithControlPaused(calibrate);
+    reportPaused(runCalibration());
   }
 
-  handleSerialCommand();
-
-  static uint32_t lastPrint = 0;
-  if (telemetryEnabled && millis() - lastPrint >= TELEMETRY_PERIOD_MS)
-  {
-    lastPrint = millis();
-    printTelemetry();
-  }
+  pollSerial();
+  pumpTelemetry();
   delay(5);
 }

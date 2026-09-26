@@ -1,8 +1,9 @@
 /**
  * @file nn_cascade_block.h
  * @brief Control en cascada con Kp de ángulo adaptada en línea por una red neuronal
- *        feed-forward (Neural_Networks_FF). Dos estructuras seleccionables con
- *        CONTROL_STRUCTURE (config.h):
+ *        feed-forward (Neural_Networks_FF). Dos estructuras seleccionables con el
+ *        parámetro structure (params.h). Los nombres de ganancias de estas fórmulas
+ *        corresponden a campos de Params (Kd_angle = kdAngle, Kp_v = kpV, ...):
  *
  * SpeedOuter (estándar de balancín):
  *   angle_ref = setpoint_angle + sat±MAX_TILT( SPEED_LOOP_SIGN·(Kp_v·v + Ki_v·∫v) )  (10 Hz)
@@ -28,36 +29,35 @@
  * USE_LEFT_ENCODER es false; de/dt = -ω (giroscopio) si USE_GYRO_DERIVATIVE.
  * Todos los integradores tienen anti-windup condicional; ∫e_v además se limita a ±150.
  *
- * Uso: initNeural() una vez; resetCascade(angle) antes de (re)activar el control;
+ * Uso: initNeural(p) una vez; resetCascade(p, angle) antes de (re)activar el control;
  *      cascada(...) cada periodo con dt > 0.
  */
 #pragma once
 #include <Arduino.h>
+#include "params.h"
 
-// Parámetros ajustables del controlador
-extern float setpoint_angle;             // Referencia del lazo de ángulo [°]
-extern float Kp_angle, Ki_angle, Kd_angle; // Kp_angle la reescribe la RN en cada ciclo
-extern float Kp_speed, Ki_speed;       // Lazo interno de velocidad (AngleOuter)
-extern float Kp_v, Ki_v;               // Lazo externo de velocidad (SpeedOuter)
-
-/** Crea la topología de la red y sus arreglos. Llamar una vez en setup(). */
-void initNeural();
+/** Crea la topología de la red y sus arreglos. Llamar una vez en setup(), tras paramsInit(). */
+void initNeural(const Params &p);
 
 /**
  * @brief Reinicia integradores e historial de errores del controlador (no los pesos
  *        de la red), usando el ángulo actual para evitar un salto en la derivada.
  */
-void resetCascade(float angle);
+void resetCascade(const Params &p, float angle);
 
 /**
  * @brief Ejecuta un paso del control en cascada (incluye entrenamiento de la RN).
+ * @param p Parámetros de ajuste vigentes en este ciclo.
  * @param angle Ángulo medido [°].
  * @param angleRate Velocidad angular medida [°/s] (giroscopio).
  * @param rpmLeft, rpmRight RPM filtradas de cada rueda.
  * @param dt Tiempo desde el paso anterior [s].
  * @return PWM de balanceo saturado a ±PWM_LIMIT.
  */
-float cascada(float angle, float angleRate, float rpmLeft, float rpmRight, float dt);
+float cascada(const Params &p, float angle, float angleRate, float rpmLeft, float rpmRight, float dt);
 
 /** @return Ángulo deseado actual [°] (en SpeedOuter lo fija el lazo de velocidad). */
 float getAngleReference();
+
+/** @return Kp actual del lazo de ángulo (la ajusta la RN). */
+float getKpAngle();

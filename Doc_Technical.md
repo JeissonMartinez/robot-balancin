@@ -17,19 +17,29 @@ El objetivo es mantener el robot en equilibrio vertical. El seguidor de línea d
 
 ## 2. Arquitectura de software 🧱
 
-Cada módulo tiene su interfaz en `include/*.h` y su implementación en `src/*.cpp`. El estado interno de cada módulo es `static` (privado); sólo se exportan funciones y los parámetros de sintonía.
+Cada módulo tiene su interfaz en `include/*.h` y su implementación en `src/*.cpp`. El estado interno de cada módulo es `static` (privado); sólo se exportan funciones. Los parámetros de sintonía viven en `params.cpp` y llegan al controlador como `const Params &` en cada ciclo.
 
 ### 2.1. Módulos principales
 
 - `src/main.cpp`
-  - Inicializa Serial, motores (deshabilitados), MPU6050 (verifica conexión), calibración, encoders y red neuronal.
-  - Arranca la tarea de control con `startControlTask()`.
-  - `loop()`: botón de calibración (con antirrebote) e impresión de telemetría cada `TELEMETRY_PERIOD_MS`.
+  - Inicializa Serial (921600), parámetros (`paramsInit()`), motores (deshabilitados), MPU6050 (verifica conexión), calibración, encoders y red neuronal.
+  - Arranca la tarea de control con `startControlTask()` y envía `hello`.
+  - `loop()`: botón de calibración (con antirrebote), lectura del Serial (teclas sueltas o líneas JSON hacia `protocolHandleLine()`) y vaciado de la cola de telemetría.
 
 - `config.h`
   - Pines de motores, encoders, I2C y botón.
   - PWM (20 kHz, 8 bits, canales/timers LEDC), `CPR`, `GEAR_RATIO`, `PPR_WHEEL`.
-  - Control: `CONTROL_PERIOD_MS`, `PWM_LIMIT`, `MAX_ANGLE`, `REARM_ANGLE`.
+  - Control: `CONTROL_PERIOD_MS`, `PWM_LIMIT`, `SERIAL_BAUD`, `FW_VERSION`, `PROTOCOL_VERSION`.
+  - Valores de fábrica de todos los parámetros ajustables (`KP_MIN`, `KD_ANGLE`, `KP_V`, `MAX_ANGLE`, ...).
+
+- `params.h / params.cpp`
+  - Estructura `Params` activa en RAM (spinlock), `paramsSnapshot()` devuelve copia y versión.
+  - Tabla de descriptores `DESCS` (clave, tipo, rango, unidad): fuente única para validar y para el comando `schema`.
+  - `paramsApplyJson()` todo o nada con reglas cruzadas; `paramsSave()` / `paramsInit()` con NVS (namespace `params`, `PARAMS_LAYOUT_VERSION`).
+
+- `protocol.h / protocol.cpp`
+  - Independiente del transporte: interpreta una línea JSON y responde en un `Print`.
+  - Formato de telemetría JSON y texto. Especificación en `docs/hmi/PROTOCOLO.md`.
 
 - `encoders.h / encoders.cpp`
   - ISRs en IRAM con lectura directa de registros GPIO (seguras durante escrituras a NVS).
@@ -37,16 +47,16 @@ Cada módulo tiene su interfaz en `include/*.h` y su implementación en `src/*.c
   - `updateWheelRPM()` (RPM + filtro IIR) y `resetWheelRPM()`.
 
 - `motors.h / motors.cpp`
-  - `setupMotors()`, `driveMotorsDifferential(pwmL, pwmR)`, `enableMotors()`, `stopMotors()`.
+  - `setupMotors()`, `driveMotorsDifferential(pwmL, pwmR)`, `compensateDeadband(pwm, deadband)`, `enableMotors()`, `stopMotors()`.
 
 - `mpu_block.h / mpu_block.cpp`
-  - `setupMPU()`, `loadCalibration()`, `calibrateMPU()`, `resetAngleFromAccel()`, `updateAngle(dt)`.
+  - `setupMPU(dlpf)`, `setMPUFilter(dlpf)`, `loadCalibration()`, `calibrateMPU()`, `resetAngleFromAccel()`, `updateAngle(dt)`.
 
 - `nn_cascade_block.h / nn_cascade_block.cpp`
-  - `initNeural()`, `resetCascade(angle)`, `cascada(angle, rpmL, rpmR, dt)`.
+  - `initNeural(p)`, `resetCascade(p, angle)`, `cascada(p, angle, rate, rpmL, rpmR, dt)`, `getAngleReference()`, `getKpAngle()`.
 
 - `tasks_block.h / tasks_block.cpp`
-  - `TaskBalanceo`, `pauseControl()`, `resumeControl()`, `getTelemetry()`.
+  - `TaskBalanceo`, `pauseControl()`, `resumeControl()`, `runWithControlPaused()`, `setEStop()`, `receiveTelemetry()` (cola de 25 tramas).
 
 - `lib/Neural_Networks_FF`, `lib/Dynamic_Array`
   - Librerías locales (no están en el registro de PlatformIO).
@@ -112,7 +122,7 @@ Al arrancar y tras calibrar, \( \theta_{\text{filt}} \) se inicializa con \( \th
 
 ## 5. Control en cascada ⚙️
 
-Hay dos estructuras seleccionables con `CONTROL_STRUCTURE` en `config.h`. Los parámetros de ambas se conservan, así que se puede cambiar de una a otra en cualquier momento. La estructura activa se imprime al arrancar.
+Hay dos estructuras seleccionables con el parámetro `structure` (fábrica: `CONTROL_STRUCTURE` en `config.h`). Los parámetros de ambas se conservan, así que se puede cambiar de una a otra en ejecución; si el robot está controlando, el controlador se reinicia al cambiar. La estructura activa se imprime al arrancar.
 
 ### 5.0. `SpeedOuter`: estructura estándar de balancín (activa por defecto)
 
@@ -159,9 +169,11 @@ La prueba `d` (monitor serie) midió que la rueda derecha empieza a girar con PW
 
 - `PWM_DEADBAND` (DB) = 14: algo menos que lo medido, porque arrancar desde parado cuesta más que mantener el giro y compensar de más produce oscilación.
 - `PWM_DEADBAND_BLEND` (B) = 4: evita el salto en 0, para que el ruido en reposo no se convierta en golpes de ±DB.
-- La telemetría muestra `u` (salida del controlador), no el PWM compensado.
+- La telemetría muestra `u` (salida del controlador) en `pwm` y el PWM compensado en `pwmM` (sólo en JSON).
 
-### 5.3. Valores actuales
+### 5.3. Valores de fábrica
+
+Se ajustan en ejecución; la tabla completa con claves y rangos está en `docs/hmi/PROTOCOLO.md` §4.
 
 | Parámetro | Valor |
 |---|---|
@@ -178,7 +190,7 @@ La prueba `d` (monitor serie) midió que la rueda derecha empieza a girar con PW
 - Topología **3‑3‑1**: 3 entradas, 3 neuronas ocultas, 1 salida.
 - Activaciones: `logsig`, `logsig`, `poslin_lim` (límites 0..1).
 - Entradas (normalizadas /100): \( [e_\theta(k),\; e_\theta(k)-e_\theta(k-1),\; e_\theta(k-1)-e_\theta(k-2)] \).
-- Salida: \( y \in [0, 1] \Rightarrow K_p^\theta = K_{p,\min} + (K_{p,\max} - K_{p,\min})\,y \), con `KP_MIN` = 55 y `KP_MAX` = 85 (`config.h`). Kp nunca es negativa. Como el PWM ≈ 0.8·Kp·e, el rango equivale a 44..68 PWM/°, coherente con la sintonía manual previa (Kp 50-70 estable, 80 oscilante).
+- Salida: \( y \in [0, 1] \Rightarrow K_p^\theta = K_{p,\min} + (K_{p,\max} - K_{p,\min})\,y \), con `kp_min`/`kp_max` (fábrica 70/70: Kp fija). Kp nunca es negativa. Como el PWM ≈ 0.8·Kp·e, un rango de 55..85 equivale a 44..68 PWM/°, coherente con la sintonía manual previa (Kp 50-70 estable, 80 oscilante).
 
 ### 6.2. Funciones de activación
 
@@ -207,17 +219,18 @@ El entrenamiento sólo se ejecuta mientras el control está activo (robot dentro
 
 Núcleo 1, prioridad 3, período `CONTROL_PERIOD_MS` = 20 ms (50 Hz) con `vTaskDelayUntil`.
 
-1. Medir \( \Delta t \) real con `esp_timer_get_time()`.
-2. `updateAngle(dt)`: leer MPU6050 y aplicar filtro complementario.
-3. `updateWheelRPM(dt, ...)`: leer/resetear encoders de forma atómica y filtrar RPM.
-4. Máquina de seguridad:
-   - Activo y \( |\theta| > \) `MAX_ANGLE` (40°) → `stopMotors()`, control inactivo.
-   - Inactivo y \( |\theta| < \) `REARM_ANGLE` (5°) → `resetCascade()`, `enableMotors()`, control activo.
+1. Copiar los parámetros activos (`paramsSnapshot`). Si cambió `mpu_dlpf`, reescribir el registro del MPU; si cambió `structure`, reiniciar el controlador.
+2. Medir \( \Delta t \) real con `esp_timer_get_time()`.
+3. `updateAngle(dt)`: leer MPU6050 y aplicar filtro complementario.
+4. `updateWheelRPM(dt, ...)`: leer/resetear encoders de forma atómica y filtrar RPM.
+5. Máquina de seguridad:
+   - Activo y (parada de emergencia o \( |\theta| > \) `max_angle`, 40°) → `stopMotors()`, control inactivo.
+   - Inactivo, sin parada de emergencia y \( |\theta| < \) `rearm_angle` (5°) → `resetCascade()`, `enableMotors()`, control activo.
    - Al encender, el control empieza inactivo hasta que el robot se pone vertical.
-5. Si está activo: `cascada(...)` → `driveMotorsDifferential(pwm, pwm)`.
-6. Publicar telemetría (instantánea protegida con spinlock).
+6. Si está activo: `cascada(...)` → `compensateDeadband()` → `driveMotorsDifferential(pwm, pwm)`.
+7. Encolar la trama de telemetría (sin esperar; si la cola está llena se descarta y se cuenta).
 
-La tarea no usa Serial; `loop()` imprime la telemetría cada 100 ms.
+La tarea no usa Serial; `loop()` vacía la cola y envía 1 de cada `div` tramas (texto a 10 Hz por defecto, JSON a 50 Hz para la HMI).
 
 ### 7.2. Calibración de MPU
 
@@ -250,15 +263,14 @@ Compilación y carga con PlatformIO:
 
 ```
 pio run -t upload
-pio device monitor -b 115200
+pio device monitor   # 921600 baudios
 ```
 
 ---
 
 ## 10. Ideas de mejora 🌱
 
-- Interfaz serie/web para ajustar parámetros PID y de la RN en tiempo real.
-- Registro de telemetría para análisis offline.
+- HMI web para ajustar parámetros y registrar telemetría: en desarrollo, ver `docs/hmi/PLAN.md`.
 - Reincorporar un modo de desplazamiento/giro (referencia de velocidad y giro diferencial aditivo).
 
 ---

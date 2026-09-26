@@ -19,14 +19,19 @@ static float accelAngle(int16_t ay, int16_t az)
   return atan2f(accelY, accelZ) * 180.0f / PI;
 }
 
-bool setupMPU()
+bool setupMPU(uint8_t dlpfMode)
 {
   Wire.begin(I2C_SDA, I2C_SCL);
   mpu.initialize();
   if (!mpu.testConnection())
     return false;
-  mpu.setDLPFMode(MPU_DLPF_MODE);
+  mpu.setDLPFMode(dlpfMode);
   return true;
+}
+
+void setMPUFilter(uint8_t dlpfMode)
+{
+  mpu.setDLPFMode(dlpfMode);
 }
 
 static void saveCalibration()

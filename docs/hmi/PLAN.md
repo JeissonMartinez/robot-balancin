@@ -4,7 +4,7 @@ Laboratorio de pruebas, análisis y monitoreo del prototipo real. Este documento
 arquitectura, el alcance de cada fase y el criterio con que se da por terminada. Se actualiza al cerrar
 cada fase.
 
-Estado: **planificación aprobada** (2026-09-26). Rama de trabajo: `feat/hmi`.
+Estado: **F0 implementada, pendiente de validar en el robot** (2026-09-26). Rama de trabajo: `feat/hmi`.
 
 ---
 
@@ -34,6 +34,12 @@ Estado: **planificación aprobada** (2026-09-26). Rama de trabajo: `feat/hmi`.
 | D6 | Ubicación | Carpeta **`hmi/`** en este repo; el firmware sigue en la raíz. | Protocolo y firmware se versionan juntos; `pio run` no cambia. | Repositorio aparte. |
 
 Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno, se anota aquí con la fecha.
+
+| Fecha | Cambio |
+|---|---|
+| 2026-09-26 | `structure` se puede cambiar con el robot controlando: el controlador se reinicia en ese ciclo (antes: sólo con el robot inactivo). |
+| 2026-09-26 | Claves del protocolo en minúsculas (`kd_angle`, `kp_v`, ...); la equivalencia con `config.h` está en PROTOCOLO.md §4. |
+| 2026-09-26 | `save` pausa el control mientras escribe en NVS, igual que la calibración. |
 
 ---
 
@@ -81,9 +87,10 @@ flowchart LR
 
 ---
 
-## 4. Protocolo (borrador v1)
+## 4. Protocolo
 
-Se detalla y congela en `docs/hmi/PROTOCOLO.md` durante la fase 0. Idea general:
+**Especificación vigente: [PROTOCOLO.md](PROTOCOLO.md).** Lo que sigue es el borrador con que se
+planificó; las claves y comandos definitivos están allí.
 
 - Un mensaje JSON por línea (Serial) o por trama (WebSocket / MQTT). Campo `v` = versión del protocolo.
 - Las teclas `d`, `c`, `t`, `?` siguen funcionando en el monitor serie; el firmware distingue un JSON
@@ -182,7 +189,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 
 | Fase | Contenido | Se da por terminada cuando |
 |---|---|---|
-| **F0** | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS. | Desde el monitor serie se cambia `Kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. |
+| **F0** ✅ código · ⏳ robot | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS; `hmi/tools/protocol_check.py`. | Desde el monitor serie se cambia `kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. `protocol_check.py --save` sin fallas. |
 | **F1** | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
 | **F2** | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
 | **F3** | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |

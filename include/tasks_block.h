@@ -1,36 +1,51 @@
 /**
  * @file tasks_block.h
- * @brief Tarea FreeRTOS de balanceo, pausa segura para calibrar y telemetría.
+ * @brief Tarea FreeRTOS de balanceo, pausa segura, parada de emergencia y telemetría.
  *
  * TaskBalanceo (núcleo 1, prioridad 3, periodo CONTROL_PERIOD_MS):
  *  - Periodo fijo con vTaskDelayUntil y dt medido con esp_timer_get_time().
+ *  - Al inicio de cada ciclo copia los parámetros activos (paramsSnapshot). Si cambió
+ *    el filtro del MPU lo reescribe; si cambió la estructura reinicia el controlador.
  *  - Ángulo (MPU) + RPM (encoders) → cascada() → mismo PWM a ambos motores.
- *  - Seguridad: si |ángulo| > MAX_ANGLE apaga motores y deja de ejecutar/entrenar
- *    el controlador; lo reactiva (con estado reiniciado) al volver a |ángulo| < REARM_ANGLE.
+ *  - Seguridad: si |ángulo| > maxAngle apaga motores y deja de ejecutar/entrenar
+ *    el controlador; lo reactiva (con estado reiniciado) al volver a |ángulo| < rearmAngle.
  *    Arranca desactivado hasta que el robot se pone vertical.
- *  - No imprime por Serial: publica una instantánea que loop() imprime.
+ *  - Parada de emergencia (setEStop): apaga motores y bloquea el re-armado hasta
+ *    setEStop(false).
+ *  - No imprime: encola una trama de telemetría por ciclo (receiveTelemetry). Si nadie
+ *    la lee a tiempo la trama se descarta; los huecos se ven en `seq`.
  *
- * Pausa para calibrar: pauseControl() pide a la tarea que se detenga al final de
- * su ciclo (sin suspenderla en medio de una transacción I2C) y espera la
- * confirmación; resumeControl() la reanuda re-sincronizando ángulo y estado.
+ * Pausa: pauseControl() pide a la tarea que se detenga al final de su ciclo (sin
+ * suspenderla en medio de una transacción I2C) y espera la confirmación;
+ * resumeControl() la reanuda re-sincronizando ángulo y estado.
  */
 #pragma once
 #include <Arduino.h>
 
+enum class RobotState : uint8_t
+{
+  Idle,   // motores off, esperando |ángulo| < rearmAngle
+  Active, // controlando
+  EStop   // parada de emergencia, no se re-arma
+};
+
 struct Telemetry
 {
-  float angle;
+  uint32_t seq;   // contador de ciclos de control
+  uint32_t tMs;   // millis() al tomar la muestra
+  float angle;    // [°]
   float angleRef; // ángulo deseado [°]
   float rate;     // velocidad angular [°/s]
-  float pwm;
+  float pwm;      // salida del controlador
+  float pwmMotor; // PWM aplicado tras compensar la zona muerta
   float rpmL;
   float rpmR;
   float kp;
-  float dt;
-  bool active; // false = motores apagados (caído o esperando vertical)
+  float dt;       // [s]
+  RobotState state;
 };
 
-/** Crea TaskBalanceo. Llamar al final de setup(). */
+/** Crea la cola de telemetría y TaskBalanceo. Llamar al final de setup(). */
 void startControlTask();
 
 /**
@@ -42,5 +57,23 @@ bool pauseControl(uint32_t timeoutMs = 500);
 /** Reanuda el control (queda desactivado hasta que el robot esté vertical). */
 void resumeControl();
 
-/** Copia la última instantánea publicada por TaskBalanceo. */
-void getTelemetry(Telemetry &out);
+/**
+ * @brief Pausa el control, ejecuta `action` y lo reanuda.
+ * @return false si la tarea no se detuvo (la acción no se ejecuta).
+ */
+bool runWithControlPaused(void (*action)());
+
+/** Activa (true) o libera (false) la parada de emergencia. */
+void setEStop(bool on);
+
+/** @return true si la parada de emergencia está activa. */
+bool isEStop();
+
+/** Saca la trama más antigua de la cola, sin bloquear. @return false si está vacía. */
+bool receiveTelemetry(Telemetry &out);
+
+/** @return Tramas descartadas porque la cola estaba llena. */
+uint32_t droppedTelemetry();
+
+/** @return "IDLE", "ACTIVE" o "ESTOP". */
+const char *robotStateName(RobotState s);

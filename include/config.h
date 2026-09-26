@@ -9,6 +9,11 @@
  *  - PWM:       frecuencia, resolución y canales/timers LEDC.
  *  - ENCODERS:  pines de cuadratura y relación de pulsos por vuelta de rueda.
  *  - CONTROL:   periodo del lazo, límites de seguridad y telemetría.
+ *  - Parámetros de ajuste (estructura, ganancias, RN, zona muerta, seguridad, DLPF):
+ *    los valores de este archivo son los de FÁBRICA. En ejecución se usan los de
+ *    params.cpp, que se ajustan por el protocolo (docs/hmi/PROTOCOLO.md) y, si se
+ *    guardaron con "save", se cargan de NVS al arrancar y mandan sobre estos.
+ *    Para volver a estos valores: comando "defaults" y luego "save".
  *
  * Notas de hardware:
  *  - GPIO 3 (R_A) y GPIO 46 (R_B) son pines de arranque (strapping) del ESP32-S3.
@@ -18,6 +23,11 @@
 #pragma once
 #include <Arduino.h>
 #include <driver/ledc.h>
+
+// ===================== VERSIONES ===============================
+#define FW_VERSION "0.2.0"
+const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
+const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
 // ===================== BOTÓN ==================================
 #define BTN_CAL 10
@@ -79,7 +89,9 @@ const float PWM_DEADBAND = 14.0f;
 // Por debajo de |PWM| < PWM_DEADBAND_BLEND la compensación crece linealmente desde 0, para
 // que el ruido del controlador en reposo no se convierta en golpes de ±PWM_DEADBAND.
 const float PWM_DEADBAND_BLEND = 4.0f;
-const uint32_t TELEMETRY_PERIOD_MS = 100;    // Impresión por Serial desde loop()
+// La tarea de control publica una trama por ciclo (50 Hz). Por Serial se envía 1 de cada
+// TELEMETRY_DIV_DEFAULT (5 = 10 Hz, legible en el monitor); el comando "tel" lo cambia.
+const uint8_t TELEMETRY_DIV_DEFAULT = 5;
 
 // ===================== PRUEBA DE ZONA MUERTA ('d' por Serial) ==
 const int DEADBAND_TEST_MAX_PWM = 120;       // PWM máximo de la rampa
@@ -96,7 +108,8 @@ const uint32_t DEADBAND_TEST_SETTLE_MS = 1500; // Reposo antes de cada rampa
 //             -> PI de velocidad (interno) -> PWM.
 // SpeedOuter: estructura estándar de balancín. PI de velocidad (externo, lento) -> ángulo
 //             deseado -> PD de ángulo (interno, 50 Hz) -> PWM. Corrige la deriva de posición.
-// Se puede cambiar en cualquier momento; los parámetros de ambas se conservan.
+// Se puede cambiar en ejecución (parámetro "structure"); los parámetros de ambas se conservan
+// y el controlador se reinicia al cambiar.
 enum class ControlStructure
 {
   AngleOuter,
@@ -117,7 +130,17 @@ const float MAX_TILT_REF_DEG = 4.0f;         // Límite del ángulo deseado que 
 // signo +1 hacía realimentación positiva: el robot se alejaba cada vez más rápido. -1 = negativa.
 // Si con -1 el robot se aleja cada vez más rápido y Ref se queda en ±MAX_TILT_REF_DEG, volver a +1.
 const float SPEED_LOOP_SIGN = -1.0f;
-// Ganancias del lazo externo: Kp_v y Ki_v en nn_cascade_block.cpp.
+
+// ===================== GANANCIAS (valores de fábrica) ============
+const float SETPOINT_ANGLE = 0.0f;           // Referencia del lazo de ángulo [°]
+const float KD_ANGLE = 1.25f;                // ≈ Kd = 1 de la sintonía manual (PWM ≈ 0.8·salida)
+const float KI_ANGLE = 1.0f;                 // Sólo AngleOuter
+const float KP_SPEED = 0.8f;                 // Sólo AngleOuter (lazo interno de velocidad)
+const float KI_SPEED = 0.0f;                 // Integral de velocidad desactivado hasta verificar encoders
+// Lazo externo de velocidad (SpeedOuter). Ganancia de lazo ≈ 15 RPM/° · Kp_v; con 0.10 era
+// 1.5 (> 1). Ki_v corrige que el cero calibrado no sea el punto de equilibrio real.
+const float KP_V = 0.05f;                    // [°/RPM]
+const float KI_V = 0.03f;                    // [°/(RPM·s)]
 
 // ===================== RED NEURONAL (Kp adaptativa) ============
 // Kp_angle = KP_MIN + (KP_MAX - KP_MIN) * salida_RN, con salida_RN en [0, 1].
