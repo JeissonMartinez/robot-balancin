@@ -98,11 +98,85 @@ dentro de una sesión.
 `t_ms` es el tiempo del robot en la última trama recibida antes del evento: con él la HMI dibuja
 las marcas en las trazas y el análisis posterior alinea eventos con telemetría.
 
-La base es SQLite (`hmi/gateway/data/balancin.db`, fuera de git); esquema en
-`app/storage/db.py`. Se puede abrir con cualquier cliente SQLite o con pandas:
+---
+
+## 5. Revisar la base de datos
+
+Archivo: `hmi/gateway/data/balancin.db` (SQLite, fuera de git; esquema en `app/storage/db.py`).
+Junto a él aparecen `balancin.db-wal` y `balancin.db-shm`: son parte de la base mientras el gateway
+está abierto (modo WAL). No borrarlos ni copiar el `.db` solo con el gateway corriendo.
+
+| Tabla | Una fila por | Columnas principales |
+|---|---|---|
+| `sessions` | conexión (o reinicio del robot) | `id`, `started_at`, `ended_at` (UTC), `transport`, `target`, `fw`, `params_json` |
+| `telemetry` | trama (50 por segundo) | `session_id`, `host_ts` (hora del PC, epoch s), `seq`, `t_ms`, `ang`, `ref`, `w`, `pwm`, `pwm_m`, `rpm_l`, `rpm_r`, `kp`, `dt`, `u_p`, `u_i`, `u_d`, `st` |
+| `events` | comando, log del robot o cambio de conexión | `session_id`, `host_ts`, `t_ms`, `kind`, `payload` (JSON) |
+| `param_sets` | juego de parámetros guardado (F2) | `name`, `params_json` |
+
+Leer es seguro con el gateway corriendo. **Modificar o borrar, sólo con el gateway detenido.**
+
+### a) Desde el navegador (sin instalar nada)
+
+Con el gateway corriendo:
+
+- `http://127.0.0.1:8000/docs`: documentación interactiva de la API; cada ruta tiene *Try it out*.
+- `http://127.0.0.1:8000/api/sessions`: lista de sesiones con el número de tramas.
+- `http://127.0.0.1:8000/api/sessions/5/events`
+- `http://127.0.0.1:8000/api/sessions/5/telemetry?limit=20`
+
+### b) Terminal (`sqlite3`, incluido en macOS)
+
+```bash
+cd hmi/gateway
+sqlite3 -readonly -header -column data/balancin.db
+```
+
+```sql
+.tables
+-- sesiones con su duración y tramas
+SELECT id, started_at, ended_at, transport, fw,
+       (SELECT COUNT(*) FROM telemetry t WHERE t.session_id = s.id) AS tramas
+FROM sessions s;
+
+-- qué se hizo en una sesión
+SELECT datetime(host_ts, 'unixepoch', 'localtime') AS hora, t_ms, kind, payload
+FROM events WHERE session_id = 5;
+
+-- resumen del ángulo mientras controlaba
+SELECT session_id, MIN(ang), MAX(ang), AVG(ABS(ang)) FROM telemetry
+WHERE st = 'ACTIVE' GROUP BY session_id;
+.quit
+```
+
+Exportar una sesión a CSV (para Excel, MATLAB, ...):
+
+```bash
+sqlite3 -readonly -header -csv data/balancin.db \
+  "SELECT * FROM telemetry WHERE session_id = 5 ORDER BY t_ms" > sesion5.csv
+```
+
+### c) Con interfaz gráfica
+
+[DB Browser for SQLite](https://sqlitebrowser.org) (`brew install --cask db-browser-for-sqlite`):
+abrir `balancin.db` con **Open Database Read Only** para no bloquear al gateway. En VS Code sirve la
+extensión *SQLite Viewer*.
+
+### d) Python / Jupyter
 
 ```python
 import sqlite3, pandas as pd
-con = sqlite3.connect("hmi/gateway/data/balancin.db")
-df = pd.read_sql("SELECT * FROM telemetry WHERE session_id = 4", con)
+con = sqlite3.connect("file:hmi/gateway/data/balancin.db?mode=ro", uri=True)
+tel = pd.read_sql("SELECT * FROM telemetry WHERE session_id = 5 ORDER BY t_ms", con)
+tel["t"] = (tel.t_ms - tel.t_ms.iloc[0]) / 1000      # s desde el inicio de la sesión
+tel.plot(x="t", y=["ang", "ref"])
 ```
+
+### Borrar sesiones
+
+Con el gateway **detenido** (la clave foránea borra también su telemetría y eventos):
+
+```bash
+sqlite3 data/balancin.db "PRAGMA foreign_keys=ON; DELETE FROM sessions WHERE id IN (1,2,3); VACUUM;"
+```
+
+En F3 la HMI tendrá la tabla de historial con filtros, exportación y borrado.

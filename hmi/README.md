@@ -54,7 +54,8 @@ primero) y **Conectar**. Sin robot, **Robot simulado** permite probar todo.
   página por HTTPS; no afectan.
 - **Parada de emergencia**: botón rojo o tecla `Esc` (en el PC).
 - El monitor serie de PlatformIO y el gateway no pueden usar el puerto a la vez.
-- Los datos quedan en `hmi/gateway/data/balancin.db` (fuera de git).
+- Los datos quedan en `hmi/gateway/data/balancin.db` (fuera de git). Cómo revisarlos:
+  [GATEWAY.md §5](../docs/hmi/GATEWAY.md#5-revisar-la-base-de-datos).
 
 ## Desarrollar
 
@@ -77,8 +78,8 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | Carpeta | Contenido |
 |---|---|
 | `core/` | `protocol.ts` (tipos de los mensajes), `gateway.ts` (WebSocket con reconexión, comandos, REST) |
-| `ui/` | Tema, conexión, cifras de cabecera, registro de eventos |
-| `plots/` | Trazas con uPlot |
+| `ui/` | Tema, conexión (se pliega al conectar en tablet y celular), cifras de cabecera, registro de eventos |
+| `plots/` | Trazas con uPlot y leyenda propia (muestra de línea, valor, clic para ocultar) |
 | `styles/` | `tokens.css` (colores del Simulador_Balancin + paleta de series), `base.css`, `layout.css` |
 
 ### Estructura de `gateway/app`
@@ -90,6 +91,18 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | `hub.py` | Clientes WebSocket conectados |
 | `transports/` | `serial_port.py`, `demo.py` (robot simulado); en F4 WebSocket, en F5 MQTT |
 | `storage/db.py` | SQLite: sesiones, telemetría, eventos, juegos de parámetros |
+
+### Tamaños de pantalla
+
+Probados: escritorio (1440 px), iPad mini horizontal (1133 × 744) y vertical (744 × 1133), celular (375 px).
+
+| Ancho | Disposición |
+|---|---|
+| > 1080 px | Dos columnas: lo que se mira a la izquierda, lo que se toca a la derecha |
+| 701–1080 px | Seguridad y conexión lado a lado arriba; cifras, trazas y registro a todo el ancho |
+| ≤ 700 px | Una columna en el mismo orden |
+
+En pantallas táctiles los controles miden al menos ~40 px de alto.
 
 ### Colores de las trazas
 

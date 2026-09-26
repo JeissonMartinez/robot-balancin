@@ -9,6 +9,8 @@
  *   tiempo del robot en que ocurrieron.
  * - Colores de las series por orden fijo (--series-1..5, ver tokens.css); los
  *   gráficos se reconstruyen al cambiar el tema.
+ * - Leyenda propia sobre cada gráfico: muestra de la línea (color y trazo), nombre y
+ *   valor (el último, o el del cursor). Un clic muestra u oculta la serie.
  */
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
@@ -56,7 +58,7 @@ export const PLOTS: PlotDef[] = [
     id: 'rpm', title: 'Ruedas', unit: 'RPM',
     series: [
       { key: 'rpmR', label: 'derecha', slot: 1, decimals: 1 },
-      { key: 'rpmL', label: 'izquierda (encoder defectuoso)', slot: 2, show: false, decimals: 1 },
+      { key: 'rpmL', label: 'izquierda', slot: 2, decimals: 1 },
     ],
   },
 ];
@@ -78,7 +80,7 @@ export class Traces {
   private t: number[] = [];
   private cols = new Map<FrameKey, Col>();
   private markers: Marker[] = [];
-  private charts: { def: PlotDef; u: uPlot; host: HTMLElement }[] = [];
+  private charts: { def: PlotDef; u: uPlot; host: HTMLElement; values: HTMLElement[] }[] = [];
   private visibility = new Map<string, boolean>();
   private frameReq = 0;
 
@@ -156,13 +158,25 @@ export class Traces {
     }
     const i = lo;
     const tSlice = this.t.slice(i);
-    for (const { def, u } of this.charts) {
-      const data = [tSlice, ...def.series.map((s) => this.cols.get(s.key)!.slice(i))] as uPlot.AlignedData;
-      u.batch(() => {
-        u.setData(data, true);
-        u.setScale('x', { min: tMin, max: tMax });
+    for (const c of this.charts) {
+      const data = [tSlice, ...c.def.series.map((s) => this.cols.get(s.key)!.slice(i))] as uPlot.AlignedData;
+      c.u.batch(() => {
+        c.u.setData(data, true);
+        c.u.setScale('x', { min: tMin, max: tMax });
       });
+      this.updateLegend(c);
     }
+  }
+
+  /** Valores de la leyenda: los del cursor si está sobre el gráfico, si no el último. */
+  private updateLegend(c: { def: PlotDef; u: uPlot; values: HTMLElement[] }) {
+    const idx = c.u.cursor.idx;
+    const n = c.u.data[0]?.length ?? 0;
+    c.def.series.forEach((s, k) => {
+      const col = c.u.data[k + 1] as (number | null)[] | undefined;
+      const v = col ? col[idx ?? n - 1] : null;
+      c.values[k].textContent = v == null ? '—' : v.toFixed(s.decimals);
+    });
   }
 
   private size() {
@@ -207,7 +221,29 @@ export class Traces {
     PLOTS.forEach((def, idx) => {
       const host = document.createElement('div');
       host.className = 'plot';
-      host.innerHTML = `<div class="plot-title">${def.title}<span class="u">[${def.unit}]</span></div>`;
+      const head = document.createElement('div');
+      head.className = 'plot-head';
+      head.innerHTML = `<div class="plot-title">${def.title}<span class="u">[${def.unit}]</span></div>`;
+      const legend = document.createElement('div');
+      legend.className = 'legend';
+      const values: HTMLElement[] = [];
+      const toggles: HTMLButtonElement[] = [];
+      def.series.forEach((s) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'lg';
+        b.title = 'Mostrar u ocultar';
+        b.setAttribute('aria-pressed', String(this.visibility.get(s.key)));
+        const dash = s.dash ? `stroke-dasharray="${s.dash.map((d) => d * 0.8).join(' ')}"` : '';
+        b.innerHTML =
+          `<svg width="20" height="6" aria-hidden="true"><line x1="1" y1="3" x2="19" y2="3" stroke="${cssVar(`--series-${s.slot}`)}" stroke-width="2.5" ${dash}/></svg>` +
+          `<span class="lbl">${s.label}</span><span class="v mono">—</span>`;
+        values.push(b.querySelector('.v')!);
+        toggles.push(b);
+        legend.append(b);
+      });
+      head.append(legend);
+      host.append(head);
       this.root.append(host);
 
       const opts: uPlot.Options = {
@@ -217,7 +253,7 @@ export class Traces {
           drag: { x: true, y: false, setScale: false },
         },
         scales: { x: { time: false, auto: false } },
-        legend: { live: true },
+        legend: { show: false },
         series: [
           { label: 't', value: (_u, v) => (v == null ? '—' : `${v.toFixed(2)} s`) },
           ...def.series.map((s) => ({
@@ -242,6 +278,7 @@ export class Traces {
         ],
         hooks: {
           setSelect: [zoomAll],
+          setCursor: [(u) => this.updateLegend({ def, u, values })],
           draw: [
             (u) => {
               const { ctx, bbox } = u;
@@ -269,7 +306,15 @@ export class Traces {
       };
       const u = new uPlot(opts, [[], ...def.series.map(() => [])] as uPlot.AlignedData, host);
       u.over.addEventListener('dblclick', () => setTimeout(() => this.render(), 0));
-      this.charts.push({ def, u, host });
+      toggles.forEach((b, k) =>
+        b.addEventListener('click', () => {
+          const show = b.getAttribute('aria-pressed') !== 'true';
+          u.setSeries(k + 1, { show });
+          b.setAttribute('aria-pressed', String(show));
+          this.visibility.set(def.series[k].key, show);
+        }),
+      );
+      this.charts.push({ def, u, host, values });
     });
     this.render();
   }

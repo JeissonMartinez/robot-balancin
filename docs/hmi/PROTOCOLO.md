@@ -61,7 +61,7 @@ Una trama por ciclo de control (50 Hz), de las que se envía 1 de cada `div`.
 | `w` | °/s | Velocidad angular del giroscopio |
 | `pwm` | −255…255 | Salida del controlador |
 | `pwmM` | −255…255 | PWM aplicado al motor, tras compensar la zona muerta |
-| `rpmL`, `rpmR` | RPM | Velocidad de cada rueda. Positiva = avance. La izquierda no es válida (encoder defectuoso) |
+| `rpmL`, `rpmR` | RPM | Velocidad de cada rueda. Positiva = avance. El control usa sólo la derecha mientras `USE_LEFT_ENCODER = false` (encoder izquierdo en revisión); la HMI muestra ambas |
 | `kp` | — | Kp actual del lazo de ángulo |
 | `dt` | s | Período real del ciclo |
 | `uP`, `uI`, `uD` | PWM | Aporte de cada término del lazo de ángulo al PWM, antes de saturar. `SpeedOuter`: `uP + uD = pwm` sin saturar, `uI = 0`. `AngleOuter`: términos del PID × `kp_speed` (su aporte a través del PI de velocidad mientras no sature). Desde fw 0.3.0 |

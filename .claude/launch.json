@@ -4,8 +4,20 @@
     {
       "name": "hmi-gateway",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd hmi/gateway && .venv/bin/python -m app --port 8000"],
+      "runtimeArgs": [
+        "-c",
+        "cd hmi/gateway && .venv/bin/python -m app --port 8000"
+      ],
       "port": 8000
+    },
+    {
+      "name": "hmi-gateway-prueba",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd hmi/gateway && BALANCIN_DB=/tmp/balancin-prueba.db .venv/bin/python -m app --port 8001"
+      ],
+      "port": 8001
     }
   ]
 }

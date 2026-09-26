@@ -1,6 +1,9 @@
 /* Rejilla principal: a la izquierda lo que se mira, a la derecha lo que se toca
-   (mismo criterio que el simulador). En pantallas angostas una sola columna,
-   con conexión y parada de emergencia arriba. */
+   (mismo criterio que el simulador).
+   - Escritorio y tablet horizontal (> 1080 px): dos columnas.
+   - Tablet vertical (iPad mini 744 px) hasta 1080: seguridad y conexión lado a lado
+     arriba, luego cifras, trazas y registro a todo el ancho.
+   - Celular (≤ 700 px): una columna en ese mismo orden. */
 main{
   padding:clamp(10px,2vw,20px);
   display:grid; gap:16px;
@@ -10,9 +13,16 @@ main{
 }
 .col{display:flex; flex-direction:column; gap:16px; min-width:0}
 @media (max-width:1080px){
-  main{grid-template-columns:minmax(0,1fr); gap:12px}
-  .col{gap:12px}
-  .col.side{order:-1}
+  main{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;
+    grid-template-areas:"seg con" "tiles tiles" "trazas trazas" "log log";
+  }
+  .col{display:contents}
+  #cardSeguridad{grid-area:seg} #cardConexion{grid-area:con} #tiles{grid-area:tiles}
+  #cardTrazas{grid-area:trazas} #cardRegistro{grid-area:log}
+}
+@media (max-width:700px){
+  main{grid-template-columns:minmax(0,1fr); grid-template-areas:"seg" "con" "tiles" "trazas" "log"}
 }
 
 /* ===================== parada de emergencia ===================== */
@@ -24,25 +34,40 @@ main{
 .btn.estop:hover:not(:disabled){filter:brightness(1.08); border-color:var(--rojo)}
 .btn.arm{min-height:48px}
 .safety-note{font-size:11px; color:var(--ink-3)}
-@media (hover:none){ .hint-teclado{display:none} }
+/* Pantallas táctiles: sin teclado y con objetivos de al menos ~40 px */
+@media (hover:none){
+  .hint-teclado{display:none}
+  .btn{min-height:40px}
+  .btn.small{min-height:34px}
+  .seg button{min-height:38px; padding:6px 13px}
+  select, input[type=text], input[type=number]{min-height:40px}
+  .lg{min-height:34px}
+}
 
 /* ===================== trazas ===================== */
 .plots{display:flex; flex-direction:column; gap:4px; padding:6px 4px 8px}
 .plot{position:relative; min-width:0}
+.plot-head{display:flex; align-items:center; flex-wrap:wrap; gap:2px 12px; padding:2px 6px 0 9px}
 .plot-title{
-  display:flex; align-items:baseline; gap:8px; padding:0 9px;
+  display:flex; align-items:baseline; gap:8px;
   font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);
 }
 .plot-title .u{letter-spacing:0; text-transform:none}
 
-/* uPlot en los colores del tema */
+/* Leyenda: la muestra lleva el color y el trazo; el texto va en tinta, nunca en color de serie */
+.legend{display:flex; flex-wrap:wrap; gap:0 2px; margin-left:auto}
+.lg{
+  display:inline-flex; align-items:center; gap:6px; border:0; background:none; cursor:pointer;
+  padding:3px 7px; border-radius:6px; font-size:12px; color:var(--ink-2); min-height:28px;
+}
+.lg:hover{background:var(--surface-2)}
+.lg svg{flex:none}
+.lg .v{color:var(--ink); font-size:11.5px; min-width:5.5ch; text-align:right}
+.lg[aria-pressed="false"]{opacity:.5}
+.lg[aria-pressed="false"] .lbl{text-decoration:line-through}
+.lg[aria-pressed="false"] .v{visibility:hidden}
+
 .uplot{font-family:inherit}
-.uplot .u-legend{font-size:11.5px; color:var(--ink-2); text-align:left; padding:0 6px}
-.uplot .u-legend .u-marker{width:12px; height:3px; border-radius:2px; border-width:0 !important}
-.uplot .u-legend .u-series{padding:1px 6px}
-.uplot .u-legend .u-series.u-off > *{opacity:.35}
-.uplot .u-legend th{font-weight:400}
-.uplot .u-legend td{font-family:"JetBrains Mono","SFMono-Regular",Menlo,monospace; font-variant-numeric:tabular-nums; font-size:11px}
 .uplot .u-select{background:color-mix(in srgb,var(--azul) 12%,transparent)}
 .uplot .u-cursor-x, .uplot .u-cursor-y{border-color:var(--ink-3) !important}
 
@@ -59,6 +84,9 @@ main{
 .log .ln.cmd .m{color:var(--azul)}
 .log .vacio{padding:6px 13px; color:var(--ink-3)}
 
+.con-resumen{display:none; font-size:12px; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+#conexion.compact .con-resumen{display:block}
+#conexion.compact > .field, #conexion.compact > .kv, #conexion.compact > .lan{display:none}
 .lan{font-size:11.5px; border-top:1px solid var(--line-soft); padding-top:9px}
 .kv{display:grid; grid-template-columns:auto minmax(0,1fr); gap:3px 12px; font-size:12px}
 .kv dt{color:var(--ink-3)}

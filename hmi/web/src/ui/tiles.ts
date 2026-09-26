@@ -16,7 +16,7 @@ export function setupTiles(root: HTMLElement, gw: Gateway) {
     <div class="tile"><span class="lbl">Ángulo θ</span><span class="val mono" id="tAng">—</span><span class="foot mono" id="tRef">ref —</span></div>
     <div class="tile"><span class="lbl">PWM</span><span class="val mono" id="tPwm">—</span><span class="foot mono" id="tPwmM">motor —</span></div>
     <div class="tile"><span class="lbl">Kp</span><span class="val mono" id="tKp">—</span><span class="foot mono" id="tW">ω —</span></div>
-    <div class="tile"><span class="lbl">Rueda derecha</span><span class="val mono" id="tRpm">—</span><span class="foot">RPM filtradas</span></div>
+    <div class="tile"><span class="lbl">Ruedas [RPM]</span><span class="val mono" id="tRpm">—</span><span class="foot">izquierda · derecha</span></div>
     <div class="tile"><span class="lbl">Ciclo</span><span class="val mono" id="tDt">—</span><span class="foot mono" id="tRate">— Hz</span></div>`;
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
@@ -43,7 +43,7 @@ export function setupTiles(root: HTMLElement, gw: Gateway) {
     $('tPwmM').textContent = `motor ${fmt(last.pwmM, 1)}`;
     $('tKp').textContent = fmt(last.kp, 2);
     $('tW').textContent = `ω ${fmt(last.w, 1)} °/s`;
-    $('tRpm').textContent = fmt(last.rpmR, 1);
+    $('tRpm').innerHTML = `${fmt(last.rpmL, 1)}<small> · </small>${fmt(last.rpmR, 1)}`;
     $('tDt').innerHTML = `${fmt(last.dt * 1000, 1)}<small> ms</small>`;
   }, 200);
 }

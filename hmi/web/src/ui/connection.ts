@@ -1,6 +1,9 @@
 /**
  * Panel de conexión: elegir transporte (USB serie o robot simulado), puerto,
  * conectar / desconectar y ver el estado del enlace. En F4 se agrega WiFi.
+ *
+ * Al conectar, en tablet y celular el panel se pliega a una línea de resumen para
+ * dejar sitio a las trazas; "Detalles" lo despliega.
  */
 import { api, type Gateway, type SerialPortInfo } from '../core/gateway';
 import type { Status } from '../core/protocol';
@@ -36,8 +39,10 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
         <button class="btn small" id="btnPuertos" type="button" title="Volver a buscar puertos">Buscar</button>
       </div>
     </div>
+    <div class="con-resumen mono" id="conResumen"></div>
     <div class="row">
       <button class="btn primary" id="btnConectar" type="button" style="flex:1">Conectar</button>
+      <button class="btn" id="btnDetalles" type="button" hidden>Detalles</button>
     </div>
     <div class="err" id="conError" hidden></div>
     <dl class="kv" id="conDatos"></dl>
@@ -51,6 +56,15 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
   const errBox = root.querySelector<HTMLElement>('#conError')!;
   const datos = root.querySelector<HTMLElement>('#conDatos')!;
   const lan = root.querySelector<HTMLElement>('#conLan')!;
+  const resumen = root.querySelector<HTMLElement>('#conResumen')!;
+  const btnDetails = root.querySelector<HTMLButtonElement>('#btnDetalles')!;
+  const narrow = matchMedia('(max-width:1080px)');
+  let compact = false;
+  let lastState: Status['state'] = 'disconnected';
+  btnDetails.addEventListener('click', () => {
+    compact = !compact;
+    render(gw.status);
+  });
 
   async function loadInfo() {
     try {
@@ -120,10 +134,25 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
   function render(s: Status | null) {
     const state = s?.state ?? 'disconnected';
     const on = state !== 'disconnected';
+    if (state !== lastState) {
+      if (state === 'connected') compact = narrow.matches;
+      if (state === 'disconnected') compact = false;
+      lastState = state;
+    }
+    root.classList.toggle('compact', on && compact);
+    btnDetails.hidden = !on;
+    btnDetails.textContent = compact ? 'Detalles' : 'Ocultar';
+    resumen.textContent = on && s
+      ? `${s.target?.replace('/dev/', '') ?? '—'} · fw ${s.fw ?? '—'} · ${s.rate.toFixed(1)} Hz · sesión #${s.session_id ?? '—'}`
+      : '';
     btnConnect.textContent = busy ? 'Espere…' : on ? 'Desconectar' : 'Conectar';
     btnConnect.classList.toggle('primary', !on);
     btnConnect.disabled = busy || !gw.linkUp;
     segBtns.forEach((b) => (b.disabled = on));
+    // Conectado: el selector muestra el transporte real, no la última elección guardada
+    const shown = on && s?.transport ? s.transport : kind;
+    segBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kind === shown)));
+    serialField.hidden = shown !== 'serial';
     sel.disabled = btnPorts.disabled = on;
     hint.innerHTML = gw.linkUp
       ? `<span class="pill ${state === 'connected' ? 'ok' : state === 'connecting' ? 'warn' : ''}">${STATE_LABEL[state]}</span>`
