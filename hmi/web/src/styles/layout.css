@@ -15,14 +15,18 @@ main{
 @media (max-width:1080px){
   main{
     grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;
-    grid-template-areas:"seg con" "tiles tiles" "trazas trazas" "log log";
+    grid-template-areas:"seg con" "tiles tiles" "trazas trazas" "par par" "juegos cmd" "log log";
   }
   .col{display:contents}
   #cardSeguridad{grid-area:seg} #cardConexion{grid-area:con} #tiles{grid-area:tiles}
   #cardTrazas{grid-area:trazas} #cardRegistro{grid-area:log}
+  #cardParametros{grid-area:par} #cardJuegos{grid-area:juegos} #cardComandos{grid-area:cmd}
+  /* Tablet: los grupos de parámetros en dos columnas */
+  #parGrupos{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 }
 @media (max-width:700px){
-  main{grid-template-columns:minmax(0,1fr); grid-template-areas:"seg" "con" "tiles" "trazas" "log"}
+  main{grid-template-columns:minmax(0,1fr); grid-template-areas:"seg" "con" "tiles" "trazas" "par" "juegos" "cmd" "log"}
+  #parGrupos{grid-template-columns:minmax(0,1fr)}
 }
 
 /* ===================== parada de emergencia ===================== */
@@ -42,6 +46,9 @@ main{
   .seg button{min-height:38px; padding:6px 13px}
   select, input[type=text], input[type=number]{min-height:40px}
   .lg{min-height:34px}
+  .ctl .num, .ctl .sel, .ctl .reset{min-height:38px}
+  .ctl .reset{padding:0 8px}
+  .ctl input[type=range]{height:28px}
 }
 
 /* ===================== trazas ===================== */
@@ -91,5 +98,85 @@ main{
 .kv{display:grid; grid-template-columns:auto minmax(0,1fr); gap:3px 12px; font-size:12px}
 .kv dt{color:var(--ink-3)}
 .kv dd{margin:0; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+/* ===================== parámetros ===================== */
+.card-body.params{gap:10px}
+.params-groups{display:grid; grid-template-columns:minmax(0,1fr); gap:10px; align-items:start}
+details.grupo{border:1px solid var(--line-soft); border-radius:8px; background:var(--surface)}
+details.grupo > summary{
+  list-style:none; cursor:pointer; padding:8px 11px; display:flex; align-items:center; gap:9px;
+  font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3);
+}
+details.grupo > summary::-webkit-details-marker{display:none}
+details.grupo > summary::before{
+  content:""; width:6px; height:6px; border-right:1.5px solid var(--ink-3); border-bottom:1.5px solid var(--ink-3);
+  transform:rotate(-45deg); transition:transform .15s ease; flex:none;
+}
+details.grupo[open] > summary::before{transform:rotate(45deg)}
+details.grupo > summary .n{margin-left:auto; text-transform:none; letter-spacing:0; color:var(--ambar); font-size:11.5px}
+.grupo-body{padding:4px 11px 11px; display:flex; flex-direction:column; gap:12px; border-top:1px solid var(--line-soft)}
+
+.ctl{
+  display:grid; grid-template-columns:minmax(0,1fr) auto auto auto; gap:3px 6px; align-items:center;
+  padding:4px 0 2px 8px; margin-left:-8px; border-left:3px solid transparent; border-radius:2px;
+}
+.ctl .name{font-size:12.5px; color:var(--ink-2); min-width:0}
+.ctl .name .key{font-size:10px; color:var(--ink-3)}
+.ctl.modificado .name .lbl::after{content:" •"; color:var(--azul-claro)}
+.ctl .num{width:78px; text-align:right; padding:2px 6px; font-size:12px; min-height:28px}
+.ctl .sel{font-size:12px; min-height:28px; grid-column:2 / span 2}
+.ctl .uni{font-size:11px; color:var(--ink-3); white-space:nowrap; min-width:2ch}
+.ctl .reset{
+  border:0; background:none; color:var(--ink-3); cursor:pointer; font-size:14px; padding:0 4px; min-height:28px;
+}
+.ctl .reset:hover:not(:disabled){color:var(--azul)}
+.ctl .reset:disabled{opacity:.3; cursor:default}
+.ctl input[type=range]{grid-column:1/-1; width:100%; accent-color:var(--azul); margin:2px 0}
+.ctl .opts{grid-column:2 / span 2; justify-self:end}
+.ctl .nota{grid-column:1/-1; font-size:11px; color:var(--ink-3); line-height:1.35}
+.ctl .nota .err-msg{color:var(--rojo)}
+.ctl.pendiente{border-left-color:var(--dorado)}
+.ctl.error{border-left-color:var(--rojo)}
+.ctl.sin-uso .name, .ctl.sin-uso input[type=range]{opacity:.55}
+
+.params-bar{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 10px; border-radius:8px;
+  background:color-mix(in srgb,var(--dorado) 14%,transparent); position:sticky; top:6px; z-index:2;
+}
+.params-msg{font-size:12px; color:var(--ink-2); margin-right:auto}
+.params-msg.err{color:var(--rojo)}
+.params-foot{display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line-soft); padding-top:10px}
+.params-foot #btnGuardarNvs{margin-left:auto}
+.switch{display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-2); cursor:pointer}
+.switch input{accent-color:var(--azul); width:15px; height:15px; margin:0}
+
+/* ===================== juegos de parámetros ===================== */
+.ps-form{display:grid; gap:7px}
+.ps-list{display:flex; flex-direction:column; gap:0; border-top:1px solid var(--line-soft)}
+.ps-item{display:flex; flex-direction:column; gap:4px; padding:9px 0; border-bottom:1px solid var(--line-soft)}
+.ps-item:last-child{border-bottom:0}
+.ps-top{display:flex; align-items:center; gap:8px}
+.ps-name{font-size:13px; color:var(--ink); overflow-wrap:anywhere}
+.ps-top .pill{margin-left:auto}
+.ps-meta{font-size:11px}
+.ps-vacio{font-size:12px; padding:8px 0}
+
+/* ===================== comandos ===================== */
+.cmd-btns{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px}
+.cmd-out{font-size:11.5px; white-space:pre-wrap; background:var(--surface-2); border-radius:7px; padding:8px 10px; color:var(--ink-2)}
+
+/* ===================== diálogo ===================== */
+dialog.dlg{
+  border:1px solid var(--line); border-radius:12px; background:var(--surface); color:var(--ink);
+  padding:18px 20px 16px; width:min(460px, calc(100vw - 32px)); box-shadow:0 20px 60px -20px rgba(0,0,0,.5);
+}
+dialog.dlg::backdrop{background:rgba(10,14,20,.45)}
+dialog.dlg h3{font-size:17px; margin-bottom:8px}
+.dlg-body{font-size:13px; color:var(--ink-2); max-height:55vh; overflow:auto}
+.dlg-body p{margin:0 0 8px}
+.dlg-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:14px}
+.btn.danger{background:var(--rojo); border-color:var(--rojo); color:#fff}
+table.diff{width:100%; border-collapse:collapse; font-size:12px}
+table.diff td{padding:4px 6px; border-bottom:1px solid var(--line-soft)}
 
 footer.pie{max-width:1680px; margin:0 auto; padding:4px clamp(10px,2vw,20px) 22px; font-size:11px; color:var(--ink-3)}

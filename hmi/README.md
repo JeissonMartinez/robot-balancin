@@ -53,6 +53,13 @@ primero) y **Conectar**. Sin robot, **Robot simulado** permite probar todo.
 - Las advertencias `Invalid HTTP request received` en el log son intentos de Safari de abrir la
   página por HTTPS; no afectan.
 - **Parada de emergencia**: botón rojo o tecla `Esc` (en el PC).
+- **Parámetros**: con **En vivo** cada cambio se envía al soltar el slider o confirmar el número
+  (Enter). Sin **En vivo** los cambios se acumulan (borde dorado) y se envían juntos con
+  **Aplicar**, útil para mover `kp_min` y `kp_max` a la vez. ↺ vuelve al valor de fábrica de ese
+  parámetro; el punto • junto al nombre indica que el robot no está en el valor de fábrica.
+  **Guardar en el robot** los deja en su memoria (pausa el control un instante: sujetar el robot).
+- **Juegos de parámetros**: se guardan en la base del PC. **Cargar** muestra antes qué cambia;
+  **Exportar** / **Importar JSON** sirven para compartirlos entre equipos.
 - El monitor serie de PlatformIO y el gateway no pueden usar el puerto a la vez.
 - Los datos quedan en `hmi/gateway/data/balancin.db` (fuera de git). Cómo revisarlos:
   [GATEWAY.md §5](../docs/hmi/GATEWAY.md#5-revisar-la-base-de-datos).
@@ -78,7 +85,8 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | Carpeta | Contenido |
 |---|---|
 | `core/` | `protocol.ts` (tipos de los mensajes), `gateway.ts` (WebSocket con reconexión, comandos, REST) |
-| `ui/` | Tema, conexión (se pliega al conectar en tablet y celular), cifras de cabecera, registro de eventos |
+| `core/paramspec.ts` | Presentación de los parámetros: nombre legible, grupo, a qué estructura aplican, paso del slider, validación local |
+| `ui/` | Tema, conexión (se pliega al conectar en tablet y celular), cifras, registro, `params.ts` (panel de parámetros), `paramsets.ts` (juegos), `commands.ts` (calibrar, zona muerta), `dialog.ts` (confirmaciones) |
 | `plots/` | Trazas con uPlot y leyenda propia (muestra de línea, valor, clic para ocultar) |
 | `styles/` | `tokens.css` (colores del Simulador_Balancin + paleta de series), `base.css`, `layout.css` |
 

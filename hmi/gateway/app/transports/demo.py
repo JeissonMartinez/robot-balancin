@@ -93,7 +93,7 @@ class SimRobot:
             "ang": round(self.th + random.gauss(0, 0.05), 2), "ref": round(self.ref, 2),
             "w": round(self.om + random.gauss(0, 1.5), 1),
             "pwm": round(u, 1), "pwmM": round(um, 1),
-            "rpmL": round(random.gauss(0, 3), 1), "rpmR": round(self.rpm + random.gauss(0, 0.5), 1),
+            "rpmL": round(self.rpm + random.gauss(0, 0.8), 1), "rpmR": round(self.rpm + random.gauss(0, 0.5), 1),
             "kp": round(self.kp, 2), "dt": PERIOD, "uP": round(up, 1), "uI": 0.0, "uD": round(ud, 1),
             "st": "ACTIVE" if self.active else ("ESTOP" if estop else "IDLE"),
         }

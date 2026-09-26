@@ -81,3 +81,45 @@ async def _emit_hello(link):
 
 def test_connect_serial_requires_port(client):
     assert client.post("/api/connect", json={"transport": "serial"}).status_code == 400
+
+
+def test_param_sets(client):
+    # Sin robot conectado hay que enviar los parámetros
+    assert client.post("/api/param-sets", json={"name": "vacío"}).status_code == 400
+    r = client.post("/api/param-sets", json={"name": "Kd alto", "params": {"kd_angle": 2.5, "vieja": 1}})
+    assert r.status_code == 200, r.text
+    sid = r.json()["id"]
+    assert client.post("/api/param-sets", json={"name": "Kd alto", "params": {"kd_angle": 1}}).status_code == 409
+    r = client.post("/api/param-sets", json={"name": "Kd alto", "params": {"kd_angle": 2.5, "vieja": 1},
+                                             "overwrite": True})
+    assert r.json()["id"] == sid
+
+    # Aplicar: la clave desconocida se omite y se informa
+    client.post("/api/connect", json={"transport": "demo"})
+    r = client.post(f"/api/param-sets/{sid}/apply").json()
+    assert r["ok"] and r["params"]["kd_angle"] == 2.5 and r["ignored"] == ["vieja"]
+
+    # Guardar los activos del robot
+    r = client.post("/api/param-sets", json={"name": "actual", "notes": "n"}).json()
+    assert r["params"]["kd_angle"] == 2.5 and r["fw"] == "demo"
+    names = [s["name"] for s in client.get("/api/param-sets").json()]
+    assert names == ["actual", "Kd alto"]
+
+    assert client.delete(f"/api/param-sets/{sid}").status_code == 200
+    assert client.delete(f"/api/param-sets/{sid}").status_code == 404
+    session = client.get("/api/status").json()["session_id"]
+    client.post("/api/disconnect")
+    ev = client.get(f"/api/sessions/{session}/events").json()
+    cmd = [e for e in ev if e["kind"] == "cmd"][0]
+    assert cmd["payload"]["source"] == "juego «Kd alto»"
+    assert any(e["kind"] == "param_set_saved" for e in ev)
+
+
+def test_disconnect_when_idle_records_nothing(client):
+    client.post("/api/disconnect")
+    client.post("/api/connect", json={"transport": "demo"})
+    session = client.get("/api/status").json()["session_id"]
+    client.post("/api/disconnect")
+    client.post("/api/disconnect")
+    kinds = [e["kind"] for e in client.get(f"/api/sessions/{session}/events").json()]
+    assert kinds.count("disconnect") == 1

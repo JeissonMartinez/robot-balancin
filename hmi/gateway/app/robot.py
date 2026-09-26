@@ -101,13 +101,15 @@ class RobotLink:
         await self.hub.broadcast(self.snapshot())
 
     async def disconnect(self):
-        if self.transport and self.state == "connected":
+        if not self.transport:
+            return  # ya desconectado: nada que registrar
+        if self.state == "connected":
             # Deja el monitor serie como estaba: texto a 10 Hz
             try:
                 await self._command_raw("tel", {"fmt": "text", "div": 5, "on": True}, timeout=0.5)
             except Exception:
                 pass
-        self._event("disconnect", {"target": self.transport.target if self.transport else None})
+        self._event("disconnect", {"target": self.transport.target})
         await self._teardown()
         await self._broadcast_status()
 
@@ -210,8 +212,9 @@ class RobotLink:
         finally:
             self._pending.pop(mid, None)
 
-    async def command(self, cmd: str, fields: dict | None = None) -> dict:
-        """Comando pedido por la HMI. Devuelve el ack del robot (sin su id)."""
+    async def command(self, cmd: str, fields: dict | None = None, source: str | None = None) -> dict:
+        """Comando pedido por la HMI. Devuelve el ack del robot (sin su id).
+        `source` queda en el evento (p. ej. el juego de parámetros que se cargó)."""
         if cmd not in CLIENT_COMMANDS:
             return {"ok": False, "err": f"comando no permitido: {cmd}"}
         if self.state != "connected":
@@ -229,7 +232,10 @@ class RobotLink:
             ack = {"ok": False, "err": str(e)}
         ack = {k: v for k, v in ack.items() if k not in ("type", "id")}
 
-        self._event("cmd", {"cmd": cmd, **fields, "ok": ack.get("ok"), "err": ack.get("err")})
+        payload = {"cmd": cmd, **fields, "ok": ack.get("ok"), "err": ack.get("err")}
+        if source:
+            payload["source"] = source
+        self._event("cmd", payload)
         if ack.get("ok") and "params" in ack:
             self.params = ack["params"]
             await self.hub.broadcast({"type": "params", "params": self.params})
@@ -293,6 +299,10 @@ class RobotLink:
         frame = dict(msg)
         frame.pop("type", None)
         self._tel_ws.append(frame)
+
+    def record(self, kind: str, payload):
+        """Evento originado fuera del enlace (p. ej. se guardó un juego de parámetros)."""
+        self._event(kind, payload)
 
     def _event(self, kind: str, payload):
         ev = {"kind": kind, "t_ms": self.last_t, "host_ts": time.time(), "payload": payload}

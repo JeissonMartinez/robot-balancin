@@ -52,6 +52,11 @@
       </div>
       <div class="plots" id="plots"></div>
     </section>
+
+    <section class="card" id="cardRegistro">
+      <div class="card-head"><h2>Registro</h2><button class="btn small" id="btnLogLimpiar" style="margin-left:auto">Limpiar</button></div>
+      <div class="log mono" id="log"><div class="vacio">Sin eventos.</div></div>
+    </section>
   </div>
 
   <aside class="col side">
@@ -71,9 +76,19 @@
       <div class="card-body" id="conexion"></div>
     </section>
 
-    <section class="card" id="cardRegistro">
-      <div class="card-head"><h2>Registro</h2><button class="btn small" id="btnLogLimpiar" style="margin-left:auto">Limpiar</button></div>
-      <div class="log mono" id="log"><div class="vacio">Sin eventos.</div></div>
+    <section class="card" id="cardParametros">
+      <div class="card-head"><h2>Parámetros</h2><span class="hint" id="parHead"></span></div>
+      <div class="card-body params" id="parametros"></div>
+    </section>
+
+    <section class="card" id="cardJuegos">
+      <div class="card-head"><h2>Juegos de parámetros</h2><span class="hint">en este PC</span></div>
+      <div class="card-body" id="juegos"></div>
+    </section>
+
+    <section class="card" id="cardComandos">
+      <div class="card-head"><h2>Comandos</h2><span class="hint">pausan el control</span></div>
+      <div class="card-body" id="comandos"></div>
     </section>
   </aside>
 </main>

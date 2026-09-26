@@ -9,7 +9,10 @@ import './styles/layout.css';
 import { Gateway } from './core/gateway';
 import { Traces } from './plots/traces';
 import { setupConnection } from './ui/connection';
+import { setupCommands } from './ui/commands';
 import { describeEvent, setupLog } from './ui/log';
+import { setupParams } from './ui/params';
+import { setupParamSets } from './ui/paramsets';
 import { setupTheme } from './ui/theme';
 import { setupTiles } from './ui/tiles';
 
@@ -21,6 +24,10 @@ setupTheme($<HTMLButtonElement>('btnTema'));
 setupConnection($('conexion'), $('conHint'), gw);
 setupTiles($('tiles'), gw);
 const log = setupLog($('log'), $<HTMLButtonElement>('btnLogLimpiar'), gw);
+const note = (m: string, bad = false) => log.add('hmi', m, bad ? 'bad' : '');
+setupParams($('parametros'), $('parHead'), gw, note);
+setupParamSets($('juegos'), gw, note);
+setupCommands($('comandos'), gw, note);
 
 // ------------------------------------------------------------ trazas
 const traces = new Traces($('plots'));
@@ -77,7 +84,8 @@ async function send(cmd: string) {
 btnEstop.addEventListener('click', () => send('estop'));
 btnArm.addEventListener('click', () => send('arm'));
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && gw.status?.state === 'connected') {
+  // Con un diálogo abierto, Esc sólo lo cierra
+  if (e.key === 'Escape' && gw.status?.state === 'connected' && !document.querySelector('dialog[open]')) {
     e.preventDefault();
     send('estop');
   }

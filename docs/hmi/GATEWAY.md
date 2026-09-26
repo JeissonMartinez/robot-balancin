@@ -22,6 +22,12 @@ Base: `http://<host>:8000`. Sin autenticación todavía (ver PLAN §8): por defe
 | `GET /api/sessions/{id}` | — | Una sesión, con `params` al conectar |
 | `GET /api/sessions/{id}/telemetry` | `t_from`, `t_to` (ms del robot), `limit` | Filas de `telemetry` |
 | `GET /api/sessions/{id}/events` | — | Filas de `events` con `payload` ya decodificado |
+| `GET /api/info` | — | Dirección y puerto; `lan_urls` para abrir la HMI desde otro equipo |
+| `GET /api/param-sets` | — | Juegos de parámetros, por nombre |
+| `GET /api/param-sets/{id}` | — | Un juego |
+| `POST /api/param-sets` | `{"name", "notes"?, "params"?, "overwrite"?}` | Guarda un juego. Sin `params`, los activos del robot conectado. Mismo nombre: `409`, salvo `overwrite: true` |
+| `DELETE /api/param-sets/{id}` | — | Borra el juego (no toca el robot) |
+| `POST /api/param-sets/{id}/apply` | — | Envía el juego al robot en un solo `set` (todo o nada). Respuesta: el ack del robot + `ignored` (claves que el firmware no conoce) |
 
 `transport: "demo"` es un robot simulado dentro del gateway (`app/transports/demo.py`): habla el
 mismo protocolo, valida los parámetros con el `schema` real del firmware y reacciona a ellos. Sirve
@@ -42,6 +48,7 @@ Un mensaje JSON por trama de texto.
 | `tel` | Cada 100 ms mientras llegan tramas | `frames`: tramas del robot sin el campo `type` (PROTOCOLO.md §2) |
 | `params` | Tras un `set`/`defaults` aceptado o la tecla `p` | `params` completos |
 | `event` | Cada evento guardado | `event`: `{kind, t_ms, host_ts, payload}` (§4) |
+| `param_sets_changed` | Al guardar o borrar un juego | — (la HMI vuelve a pedir la lista) |
 | `ack` | Respuesta a un comando de este cliente | `id` del cliente, `ok`, `err` y los campos extra del robot |
 
 ### HMI → gateway
@@ -92,7 +99,8 @@ dentro de una sesión.
 | `disconnect` | `target` |
 | `reboot` | — (se cierra la sesión y se abre otra) |
 | `connection_lost` | `reason` |
-| `cmd` | `cmd`, sus campos (p. ej. `params`), `ok`, `err` |
+| `cmd` | `cmd`, sus campos (p. ej. `params`), `ok`, `err`; `source` si vino de un juego (`juego «nombre»`) |
+| `param_set_saved` | `name`, `id` |
 | `log` | `msg`: línea de texto libre del robot |
 
 `t_ms` es el tiempo del robot en la última trama recibida antes del evento: con él la HMI dibuja
@@ -111,7 +119,7 @@ está abierto (modo WAL). No borrarlos ni copiar el `.db` solo con el gateway co
 | `sessions` | conexión (o reinicio del robot) | `id`, `started_at`, `ended_at` (UTC), `transport`, `target`, `fw`, `params_json` |
 | `telemetry` | trama (50 por segundo) | `session_id`, `host_ts` (hora del PC, epoch s), `seq`, `t_ms`, `ang`, `ref`, `w`, `pwm`, `pwm_m`, `rpm_l`, `rpm_r`, `kp`, `dt`, `u_p`, `u_i`, `u_d`, `st` |
 | `events` | comando, log del robot o cambio de conexión | `session_id`, `host_ts`, `t_ms`, `kind`, `payload` (JSON) |
-| `param_sets` | juego de parámetros guardado (F2) | `name`, `params_json` |
+| `param_sets` | juego de parámetros guardado | `name`, `created_at`, `notes`, `fw`, `params_json` |
 
 Leer es seguro con el gateway corriendo. **Modificar o borrar, sólo con el gateway detenido.**
 

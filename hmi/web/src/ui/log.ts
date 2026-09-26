@@ -11,12 +11,15 @@ export function describeEvent(ev: GwEvent): { kind: string; text: string; cls: s
     case 'log':
       return { kind: 'robot', text: p.msg, cls: '' };
     case 'cmd': {
-      const { cmd, ok, err, ...rest } = p;
-      const args = cmd === 'set' && rest.params
-        ? Object.entries(rest.params).map(([k, v]) => `${k}=${v}`).join(' ')
-        : '';
+      const { cmd, ok, err, source, ...rest } = p;
+      const entries = cmd === 'set' && rest.params ? Object.entries(rest.params) : [];
+      const args = source
+        ? `${source} (${entries.length} parámetros)`
+        : entries.map(([k, v]) => `${k}=${v}`).join(' ');
       return { kind: 'cmd', text: `${cmd}${args ? ' ' + args : ''}${ok ? '' : ` ✗ ${err ?? ''}`}`, cls: ok ? 'cmd' : 'bad' };
     }
+    case 'param_set_saved':
+      return { kind: 'juego', text: `«${p.name}» guardado en el PC`, cls: '' };
     case 'connect':
       return { kind: 'enlace', text: `conectado a ${p.target} (fw ${p.hello?.fw})`, cls: '' };
     case 'disconnect':

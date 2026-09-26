@@ -3,7 +3,7 @@
  * respuesta (Promise). Toda la HMI se entera de lo que pasa por los eventos de
  * esta clase; nadie más abre sockets.
  */
-import type { Ack, Frame, GwEvent, ParamDesc, Params, ServerMsg, Status } from './protocol';
+import type { Ack, Frame, GwEvent, ParamDesc, Params, ParamSet, ServerMsg, Status } from './protocol';
 
 interface EventMap {
   link: boolean; // WebSocket con el gateway abierto / cerrado
@@ -12,6 +12,7 @@ interface EventMap {
   params: Params | null;
   frames: Frame[];
   event: GwEvent;
+  paramSetsChanged: void;
 }
 type Listener<K extends keyof EventMap> = (v: EventMap[K]) => void;
 
@@ -88,6 +89,9 @@ export class Gateway {
       case 'event':
         this.emit('event', msg.event);
         break;
+      case 'param_sets_changed':
+        this.emit('paramSetsChanged', undefined);
+        break;
       case 'ack': {
         const p = this.pending.get(msg.id);
         if (p) {
@@ -124,6 +128,13 @@ export interface SerialPortInfo {
   usb: boolean;
 }
 
+/** Error de la API REST con su código HTTP (p. ej. 409 = ya existe). */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, {
     method,
@@ -131,7 +142,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((data as { detail?: string }).detail ?? `${r.status} ${r.statusText}`);
+  if (!r.ok) throw new ApiError((data as { detail?: string }).detail ?? `${r.status} ${r.statusText}`, r.status);
   return data as T;
 }
 
@@ -140,4 +151,9 @@ export const api = {
   transports: () => request<{ serial: { ports: SerialPortInfo[]; baud: number } }>('GET', '/api/transports'),
   connect: (transport: 'serial' | 'demo', port?: string) => request<Status>('POST', '/api/connect', { transport, port }),
   disconnect: () => request<Status>('POST', '/api/disconnect'),
+  paramSets: () => request<ParamSet[]>('GET', '/api/param-sets'),
+  saveParamSet: (body: { name: string; notes?: string; params?: Params; overwrite?: boolean }) =>
+    request<ParamSet>('POST', '/api/param-sets', body),
+  deleteParamSet: (id: number) => request<{ ok: boolean }>('DELETE', `/api/param-sets/${id}`),
+  applyParamSet: (id: number) => request<Ack & { ignored: string[] }>('POST', `/api/param-sets/${id}/apply`),
 };

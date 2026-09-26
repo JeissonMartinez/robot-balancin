@@ -6,6 +6,7 @@ cada fase.
 
 Estado (2026-09-26):
 - **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
+- **F2 implementada**: panel de parámetros desde el `schema`, juegos de parámetros en SQLite (guardar, cargar con vista previa de cambios, exportar e importar JSON), comandos de calibración y zona muerta con confirmación. Probada con el robot simulado en escritorio, iPad mini y celular. Falta la prueba con el robot.
 - **F1 cerrada y validada en el robot**: fw 0.3.0 por USB, 50.1 Hz, 0 tramas perdidas, parámetros leídos de NVS, sesión en SQLite, marcas de eventos en las trazas; acceso por la red local (`--host 0.0.0.0`) comprobado en la IP del PC; falta confirmarlo desde el celular. Rama de trabajo: `feat/hmi`.
 
 ---
@@ -46,6 +47,8 @@ Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno
 | 2026-09-26 | Transporte `demo` en el gateway: robot simulado con el mismo protocolo, para desarrollar y practicar sin hardware. |
 | 2026-09-26 | Nueva sesión en SQLite también cuando el robot se reinicia, para que `t_ms` no retroceda dentro de una sesión. |
 | 2026-09-26 | Colores de las trazas: paleta categórica validada para daltonismo (`--series-1..5`), no los colores institucionales. |
+| 2026-09-26 | Parámetros: modo "en vivo" por defecto (envío al soltar), con modo por lotes para cambios acoplados. Nombres, grupos y aplicabilidad por estructura viven en la HMI (`paramspec.ts`); rangos y valores de fábrica, en el firmware. |
+| 2026-09-26 | La rueda izquierda se muestra siempre (encoder en revisión), aunque el control use sólo la derecha. |
 
 ---
 
@@ -200,7 +203,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 |---|---|---|
 | **F0** ✅ | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS; `hmi/tools/protocol_check.py`. | Desde el monitor serie se cambia `kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. `protocol_check.py --save` sin fallas. |
 | **F1** ✅ | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
-| **F2** | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
+| **F2** ✅ código · ⏳ robot | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
 | **F3** | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
 | **F4** | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
 | **F5** | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |

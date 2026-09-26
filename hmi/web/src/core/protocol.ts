@@ -68,10 +68,21 @@ export interface Ack {
   [k: string]: unknown;
 }
 
+/** Juego de parámetros guardado en la base del PC. */
+export interface ParamSet {
+  id: number;
+  name: string;
+  created_at: string;
+  notes: string | null;
+  fw: string | null;
+  params: Params;
+}
+
 export type ServerMsg =
   | { type: 'snapshot'; status: Status; schema: ParamDesc[] | null; params: Params | null }
   | { type: 'status'; status: Status }
   | { type: 'tel'; frames: Frame[] }
   | { type: 'params'; params: Params }
   | { type: 'event'; event: GwEvent }
+  | { type: 'param_sets_changed' }
   | ({ type: 'ack'; id: number } & Ack);

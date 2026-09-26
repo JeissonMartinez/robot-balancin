@@ -175,6 +175,50 @@ class Database:
         return out
 
 
+    # ---------------------------------------------------------------- juegos de parámetros
+    def list_param_sets(self) -> list[dict]:
+        with self._lock:
+            rows = self._con.execute("SELECT * FROM param_sets ORDER BY name COLLATE NOCASE").fetchall()
+        return [_param_set_dict(r) for r in rows]
+
+    def get_param_set(self, set_id: int) -> dict | None:
+        with self._lock:
+            r = self._con.execute("SELECT * FROM param_sets WHERE id=?", (set_id,)).fetchone()
+        return _param_set_dict(r) if r else None
+
+    def save_param_set(self, name: str, params: dict, notes: str | None = None, fw: str | None = None,
+                       overwrite: bool = False) -> dict:
+        """Crea un juego. Con el mismo nombre falla (ValueError) salvo `overwrite`, que lo
+        reemplaza conservando su id."""
+        with self._lock:
+            row = self._con.execute("SELECT id FROM param_sets WHERE name=?", (name,)).fetchone()
+            if row and not overwrite:
+                raise ValueError(f"ya existe un juego llamado «{name}»")
+            data = (now_iso(), notes, fw, json.dumps(params, ensure_ascii=False))
+            if row:
+                self._con.execute("UPDATE param_sets SET created_at=?, notes=?, fw=?, params_json=? WHERE id=?",
+                                  (*data, row["id"]))
+                set_id = row["id"]
+            else:
+                set_id = self._con.execute(
+                    "INSERT INTO param_sets(name, created_at, notes, fw, params_json) VALUES (?,?,?,?,?)",
+                    (name, *data)).lastrowid
+            self._con.commit()
+        return self.get_param_set(set_id)
+
+    def delete_param_set(self, set_id: int) -> bool:
+        with self._lock:
+            n = self._con.execute("DELETE FROM param_sets WHERE id=?", (set_id,)).rowcount
+            self._con.commit()
+        return n > 0
+
+
+def _param_set_dict(r: sqlite3.Row) -> dict:
+    d = dict(r)
+    d["params"] = json.loads(d.pop("params_json"))
+    return d
+
+
 def _session_dict(r: sqlite3.Row) -> dict:
     d = dict(r)
     d["params"] = json.loads(d.pop("params_json")) if d.get("params_json") else None
