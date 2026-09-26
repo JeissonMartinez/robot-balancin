@@ -34,7 +34,7 @@ incluido un comando JSON, que se pierde. El gateway no debe enviar nada hasta re
 Al arrancar y como respuesta a `hello`.
 
 ```json
-{"type":"hello","fw":"0.2.0","proto":1,"period_ms":20,"structure":"SpeedOuter","params_src":"nvs"}
+{"type":"hello","fw":"0.3.0","proto":1,"period_ms":20,"structure":"SpeedOuter","params_src":"nvs"}
 ```
 
 | Campo | Significado |
@@ -49,7 +49,7 @@ Al arrancar y como respuesta a `hello`.
 Una trama por ciclo de control (50 Hz), de las que se envía 1 de cada `div`.
 
 ```json
-{"type":"tel","seq":1024,"t":20480,"ang":0.53,"ref":-0.21,"w":-4.2,"pwm":-12.4,"pwmM":-26.1,"rpmL":0.0,"rpmR":-2.9,"kp":70.00,"dt":0.0200,"st":"ACTIVE"}
+{"type":"tel","seq":1024,"t":20480,"ang":0.53,"ref":-0.21,"w":-4.2,"pwm":-12.4,"pwmM":-26.1,"rpmL":0.0,"rpmR":-2.9,"kp":70.00,"dt":0.0200,"uP":-18.5,"uI":0.0,"uD":6.1,"st":"ACTIVE"}
 ```
 
 | Campo | Unidad | Significado |
@@ -64,9 +64,10 @@ Una trama por ciclo de control (50 Hz), de las que se envía 1 de cada `div`.
 | `rpmL`, `rpmR` | RPM | Velocidad de cada rueda. Positiva = avance. La izquierda no es válida (encoder defectuoso) |
 | `kp` | — | Kp actual del lazo de ángulo |
 | `dt` | s | Período real del ciclo |
+| `uP`, `uI`, `uD` | PWM | Aporte de cada término del lazo de ángulo al PWM, antes de saturar. `SpeedOuter`: `uP + uD = pwm` sin saturar, `uI = 0`. `AngleOuter`: términos del PID × `kp_speed` (su aporte a través del PI de velocidad mientras no sature). Desde fw 0.3.0 |
 | `st` | — | `ACTIVE` controlando · `IDLE` motores off, esperando vertical · `ESTOP` parada de emergencia |
 
-Con los motores apagados `pwm` y `pwmM` valen 0. Si el Serial no alcanza a vaciar la cola (25
+Con los motores apagados `pwm`, `pwmM`, `uP`, `uI` y `uD` valen 0. Si el Serial no alcanza a vaciar la cola (25
 tramas), las nuevas se descartan; el contador sale en el `ack` de `tel` (`dropped`).
 
 ### `ack` — respuesta a un comando

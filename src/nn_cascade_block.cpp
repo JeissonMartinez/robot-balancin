@@ -30,6 +30,8 @@ static float outer_rpm_sum = 0;
 static float outer_time = 0;
 static int outer_samples = 0;
 
+static ControlTerms terms = {}; // Aporte de cada término al PWM en el último ciclo
+
 void initNeural(const Params &p)
 {
   Kp_angle = p.kpMin;
@@ -77,6 +79,7 @@ void resetCascade(const Params &p, float angle)
   angle_prev_error = error;
   angle_integral = 0;
   speed_integral = 0;
+  terms = {};
   outer_speed_integral = 0;
   outer_rpm_sum = 0;
   outer_time = 0;
@@ -91,6 +94,11 @@ float getAngleReference()
 float getKpAngle()
 {
   return Kp_angle;
+}
+
+ControlTerms getControlTerms()
+{
+  return terms;
 }
 
 // RN: ajuste en línea de Kp_angle a partir del error de ángulo actual (común a ambas
@@ -125,6 +133,8 @@ static float cascadeAngleOuter(const Params &p, float angleRate, float speed_mea
   // --- Lazo de ángulo (PID) -> referencia de velocidad ---
   float derivative = angleDerivative(p, angleRate, dt);
   float pid_unsat = Kp_angle * error + p.kiAngle * angle_integral + p.kdAngle * derivative;
+  // Aporte al PWM a través del PI de velocidad (válido mientras speed_ref no sature)
+  terms = {p.kpSpeed * Kp_angle * error, p.kpSpeed * p.kiAngle * angle_integral, p.kpSpeed * p.kdAngle * derivative};
 
   float speed_ref = constrain(pid_unsat, -300, 300);
   if (!((pid_unsat != speed_ref) && (error * pid_unsat) > 0))
@@ -192,6 +202,7 @@ static float cascadeSpeedOuter(const Params &p, float angleRate, float speed_mea
   float derivative = angleDerivative(p, angleRate, dt);
   angle_prev_error = error;
   float pwm_unsat = ANGLE_LOOP_PWM_GAIN * (Kp_angle * error + p.kdAngle * derivative);
+  terms = {ANGLE_LOOP_PWM_GAIN * Kp_angle * error, 0.0f, ANGLE_LOOP_PWM_GAIN * p.kdAngle * derivative};
   return constrain(pwm_unsat, -PWM_LIMIT, PWM_LIMIT);
 }
 

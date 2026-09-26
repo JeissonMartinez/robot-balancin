@@ -36,6 +36,18 @@
 #include <Arduino.h>
 #include "params.h"
 
+/**
+ * @brief Aporte de cada término del lazo de ángulo al PWM, antes de saturar.
+ *  - SpeedOuter: p = 0.8·Kp·e, i = 0, d = 0.8·Kd·de/dt  (p + d = PWM sin saturar).
+ *  - AngleOuter: los términos del PID multiplicados por kp_speed, es decir, su aporte
+ *    a través del PI de velocidad mientras speed_ref no sature. El PWM además incluye
+ *    −kp_speed·v y la integral de velocidad, que no están aquí.
+ */
+struct ControlTerms
+{
+  float p, i, d;
+};
+
 /** Crea la topología de la red y sus arreglos. Llamar una vez en setup(), tras paramsInit(). */
 void initNeural(const Params &p);
 
@@ -61,3 +73,6 @@ float getAngleReference();
 
 /** @return Kp actual del lazo de ángulo (la ajusta la RN). */
 float getKpAngle();
+
+/** @return Términos P, I, D del último ciclo (cero con el control inactivo). */
+ControlTerms getControlTerms();

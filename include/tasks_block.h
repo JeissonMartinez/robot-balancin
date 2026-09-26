@@ -42,6 +42,7 @@ struct Telemetry
   float rpmR;
   float kp;
   float dt;       // [s]
+  float uP, uI, uD; // aporte de cada término al PWM (ver ControlTerms)
   RobotState state;
 };
 

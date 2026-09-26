@@ -106,16 +106,18 @@ static void TaskBalanceo(void *pvParameters)
     }
 
     float pwm = 0, pwmMotor = 0;
+    ControlTerms terms = {};
     if (active)
     {
       pwm = cascada(p, angle, getAngularRate(), rpmL_f, rpmR_f, dt);
       pwmMotor = compensateDeadband(pwm, p.pwmDeadband);
       driveMotorsDifferential(pwmMotor, pwmMotor);
+      terms = getControlTerms();
     }
 
     RobotState state = active ? RobotState::Active : (stopNow ? RobotState::EStop : RobotState::Idle);
     Telemetry t = {seq++, millis(), angle, getAngleReference(), getAngularRate(), pwm, pwmMotor,
-                   rpmL_f, rpmR_f, getKpAngle(), dt, state};
+                   rpmL_f, rpmR_f, getKpAngle(), dt, terms.p, terms.i, terms.d, state};
     if (xQueueSend(telemetryQueue, &t, 0) != pdTRUE)
       dropped.fetch_add(1);
 
