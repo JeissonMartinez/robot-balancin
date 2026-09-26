@@ -1,0 +1,203 @@
+# HMI del balancín: plan de diseño
+
+Laboratorio de pruebas, análisis y monitoreo del prototipo real. Este documento fija las decisiones de
+arquitectura, el alcance de cada fase y el criterio con que se da por terminada. Se actualiza al cerrar
+cada fase.
+
+Estado: **planificación aprobada** (2026-09-26). Rama de trabajo: `feat/hmi`.
+
+---
+
+## 1. Alcance inicial
+
+| Función | Descripción |
+|---|---|
+| Trazas | Gráficos en vivo de las variables de telemetría, con pausa, zoom y selección de series. |
+| Escena 2D / 3D | Robot animado con el ángulo, la velocidad de rueda y el PWM medidos. |
+| Historial | Tabla de telemetría por sesión, guardada en SQLite en el PC, exportable a CSV. |
+| Parámetros | Slider + campo numérico por parámetro, aplicados en tiempo real. Juegos de parámetros con nombre, guardados en SQLite. |
+| Control | Conexión (Serial / WiFi / MQTT), comandos actuales (`d`, `c`, `t`), parada de emergencia, persistencia en NVS. |
+| Visual | Tema claro / oscuro, header institucional (logos, título, descripción, autoría), uso cómodo en celular. |
+| Despliegue | Hoy local en el PC; la arquitectura permite llevarlo a una app web propia sin reescribirlo. |
+
+---
+
+## 2. Decisiones
+
+| # | Decisión | Elegida | Motivo | Descartadas |
+|---|---|---|---|---|
+| D1 | Conexión robot ↔ PC | **Gateway en PC + WebSocket directo al ESP32** (AP propio o STA). Serial como respaldo. MQTT como adaptador opcional (fase 5). | Un solo salto, la menor latencia, funciona en clase sin depender de la red de la universidad. | MQTT desde el inicio (necesita red compartida y broker; frágil con WPA2-Enterprise o aislamiento de clientes). HMI servida por el ESP32 (sin BD en PC, más carga en el micro). |
+| D2 | Backend | **Python + FastAPI** | pyserial, SQLite y paho-mqtt maduros; el análisis posterior se hace con numpy/pandas. | Node + TypeScript. |
+| D3 | Frontend | **TypeScript sin framework + Vite** | Reuso casi directo del código del simulador; bundle pequeño. | Svelte, React. |
+| D4 | Escena 3D | **Portar la proyección en canvas del simulador** | Cero dependencias, idéntica al simulador, ya probada. | Three.js. |
+| D5 | Trazas | **uPlot** (~45 kB) | Hecha para series de tiempo en streaming; zoom y cursor incluidos. | Chart.js (lento a 50 Hz), canvas propio (hay que rehacer zoom/cursor). |
+| D6 | Ubicación | Carpeta **`hmi/`** en este repo; el firmware sigue en la raíz. | Protocolo y firmware se versionan juntos; `pio run` no cambia. | Repositorio aparte. |
+
+Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno, se anota aquí con la fecha.
+
+---
+
+## 3. Arquitectura
+
+```mermaid
+flowchart LR
+    subgraph Robot["ESP32-S3"]
+        CT["TaskBalanceo<br/>núcleo 1 · 50 Hz"]
+        PR["Params<br/>(RAM + NVS)"]
+        CM["Comunicaciones<br/>núcleo 0"]
+        CT -- telemetría --> CM
+        CM -- set / comandos --> PR
+        PR -- copia por ciclo --> CT
+    end
+    subgraph PC["PC (hoy) · servidor (futuro)"]
+        GW["Gateway FastAPI"]
+        DB[("SQLite")]
+        GW --- DB
+    end
+    CM -- "Serial 921600" --> GW
+    CM -- "WebSocket (WiFi)" --> GW
+    CM -. "MQTT (fase 5)" .-> GW
+    GW -- "WebSocket + REST" --> UI["HMI web<br/>PC / celular"]
+```
+
+- **El gateway es el único que habla con el robot.** La HMI solo habla con el gateway, sin importar el
+  transporte. Cambiar de Serial a WiFi o a MQTT no toca el frontend.
+- **Transportes intercambiables.** Cada uno implementa la misma interfaz (`connect`, `send`, flujo de
+  mensajes). Todos transportan el mismo protocolo.
+- **Celular.** Con el ESP32 en modo AP, PC y celular se conectan a la red del robot y el celular abre la
+  HMI desde la IP del PC. En modo STA, todo va por la red local.
+- **Despliegue futuro.** El gateway y el build estático del frontend se empaquetan en Docker. Para
+  alcanzar un robot desde un servidor remoto, el transporte natural es MQTT; por eso queda previsto.
+
+### Firmware
+
+- Los parámetros de ajuste pasan de `const` en `config.h` a una estructura `Params` en RAM. La tarea de
+  control toma una copia al empezar cada ciclo (bajo spinlock), así nunca usa un juego mezclado.
+- `set` valida rango y tipo antes de aplicar. Fuera de rango se rechaza con error.
+- `save` guarda los parámetros en NVS; al arrancar se cargan de NVS si existen, si no, los valores por
+  defecto de `config.h`, que siguen siendo la referencia.
+- Parada de emergencia remota (`estop`): apaga motores y desactiva el re-armado automático hasta `arm`.
+- WiFi y WebSocket corren en el núcleo 0; la tarea de control sigue sola en el núcleo 1.
+
+---
+
+## 4. Protocolo (borrador v1)
+
+Se detalla y congela en `docs/hmi/PROTOCOLO.md` durante la fase 0. Idea general:
+
+- Un mensaje JSON por línea (Serial) o por trama (WebSocket / MQTT). Campo `v` = versión del protocolo.
+- Las teclas `d`, `c`, `t`, `?` siguen funcionando en el monitor serie; el firmware distingue un JSON
+  porque empieza con `{`.
+
+```jsonc
+// Robot → gateway, 50 Hz
+{"type":"tel","seq":1024,"t":20480,"ang":0.53,"ref":-0.21,"w":-4.2,"pwm":-12.4,"pwmM":-26.1,
+ "rpmL":0.0,"rpmR":-2.9,"kp":70.0,"dt":0.0200,"st":"ACTIVE"}
+
+// Gateway → robot
+{"type":"cmd","id":7,"cmd":"set","params":{"Kd_angle":1.3,"Kp_v":0.04}}
+{"type":"cmd","id":8,"cmd":"get"}            // devuelve todos los parámetros
+{"type":"cmd","id":9,"cmd":"save"}           // parámetros actuales → NVS
+{"type":"cmd","id":10,"cmd":"calib"}         // igual que 'c'
+{"type":"cmd","id":11,"cmd":"deadband"}      // igual que 'd'
+{"type":"cmd","id":12,"cmd":"estop"}         // y "arm" para liberar
+
+// Robot → gateway
+{"type":"ack","id":7,"ok":true,"params":{...}}
+{"type":"ack","id":7,"ok":false,"err":"Kd_angle fuera de rango [0, 5]"}
+{"type":"log","lvl":"info","msg":"Calibración MPU completa."}
+{"type":"hello","fw":"0.2.0","proto":1,"structure":"SpeedOuter"}
+```
+
+A 50 Hz, ~180 bytes por trama son ~9 kB/s. El Serial pasa de 115200 a **921600** baudios para tener margen.
+
+### Parámetros ajustables en vivo (rangos propuestos)
+
+| Parámetro | Actual | Rango | Nota |
+|---|---|---|---|
+| `structure` | SpeedOuter | SpeedOuter / AngleOuter | Cambio con robot inactivo. |
+| `setpoint_angle` | 0 | −10 … 10 ° | |
+| `KP_MIN`, `KP_MAX` | 70 / 70 | 0 … 150 | `KP_MIN ≤ KP_MAX`. |
+| `Kd_angle` | 1.25 | 0 … 5 | |
+| `Ki_angle` | 1.0 | 0 … 10 | AngleOuter. |
+| `Kp_speed`, `Ki_speed` | 0.8 / 0 | 0 … 3 / 0 … 2 | AngleOuter. |
+| `Kp_v`, `Ki_v` | 0.05 / 0.03 | 0 … 0.5 | SpeedOuter. |
+| `SPEED_LOOP_SIGN` | −1 | ±1 | |
+| `SPEED_REF_RPM` | 0 | −30 … 30 RPM | Permite pedir avance. |
+| `MAX_TILT_REF_DEG` | 4 | 0 … 10 ° | |
+| `PWM_DEADBAND` | 14 | 0 … 40 | |
+| `NN_ERROR_BAND` | 1.0 | 0 … 5 ° | |
+| `NN_LEARNING_RATE` | 0.5 | 0 … 3 | |
+| `KP_FILTER_TAU` | 0.3 | 0 … 2 s | |
+| `MAX_ANGLE`, `REARM_ANGLE` | 40 / 5 | 10 … 60 / 1 … 15 ° | `REARM < MAX`. |
+| `MPU_DLPF_MODE` | 3 | 0 … 6 | Escribe por I2C: se aplica con el control en pausa. |
+| `USE_GYRO_DERIVATIVE` | true | bool | |
+
+Pines, PWM, encoders y período de control quedan fijos en `config.h` (dependen del hardware).
+
+---
+
+## 5. Almacenamiento (SQLite)
+
+| Tabla | Contenido |
+|---|---|
+| `sessions` | Una por conexión: inicio, fin, transporte, versión de firmware, juego de parámetros inicial, notas. |
+| `telemetry` | Una fila por trama: sesión, `seq`, `t` del robot, hora del PC y cada variable en su columna. |
+| `param_sets` | Juegos de parámetros con nombre, fecha, notas y el JSON completo. |
+| `events` | Comandos enviados, respuestas, cambios de parámetro, logs del robot. Permite reconstruir qué se tocó y cuándo. |
+
+La telemetría se inserta por lotes (cada ~0.5 s) para no frenar el gateway. El archivo vive en
+`hmi/gateway/data/` y queda fuera de git.
+
+---
+
+## 6. Estructura de carpetas
+
+```
+Balancin-ControlRN/
+├── src/, include/, lib/          firmware (sin cambio de ubicación)
+├── docs/hmi/
+│   ├── PLAN.md                   este documento
+│   └── PROTOCOLO.md              fase 0
+└── hmi/
+    ├── gateway/                  Python + FastAPI
+    │   ├── app/                  API REST, WebSocket hacia la HMI
+    │   ├── transports/           serial.py, websocket.py, mqtt.py
+    │   ├── storage/              SQLite
+    │   └── tests/
+    ├── web/                      TypeScript + Vite
+    │   ├── src/core/             cliente WS, estado, tipos del protocolo
+    │   ├── src/ui/               header, tema, paneles, sliders
+    │   ├── src/scene/            escena 2D / 3D (portada del simulador)
+    │   ├── src/plots/            trazas (uPlot)
+    │   └── public/logos/
+    └── docker-compose.yml        fase 5–6 (Mosquitto, gateway)
+```
+
+---
+
+## 7. Fases
+
+Cada fase termina con commit, actualización de este documento y, si cambia el uso, del README.
+
+| Fase | Contenido | Se da por terminada cuando |
+|---|---|---|
+| **F0** | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS. | Desde el monitor serie se cambia `Kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. |
+| **F1** | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
+| **F2** | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
+| **F3** | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
+| **F4** | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
+| **F5** | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
+| **F6** | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |
+
+---
+
+## 8. Riesgos
+
+| Riesgo | Mitigación |
+|---|---|
+| Cambiar una ganancia en vivo tumba el robot. | Validación de rangos en firmware, `estop` siempre visible, el robot se re-arma solo al ponerlo vertical. |
+| WiFi introduce jitter en el control. | Control solo en el núcleo 1; se vigila `dt` en la telemetría; criterio de aceptación de F4. |
+| Picos de corriente del WiFi (~300 mA) bajan la tensión de la LiPo. | Se registra y se compara RPM máxima con y sin WiFi en F4. |
+| En modo AP el PC pierde internet. | Modo STA disponible; con cable de red el PC mantiene ambos. |
+| Serial saturado a 50 Hz. | 921600 baudios; tramas compactas. |

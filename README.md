@@ -237,3 +237,9 @@ pio device monitor -b 115200
 - Las librerías **Neural_Networks_FF** y **Dynamic_Array** están en `lib/` y PlatformIO las detecta automáticamente. La del MPU6050 se descarga desde `lib_deps`.
 
 Más detalle en [Doc_Technical.md](Doc_Technical.md).
+
+---
+
+## 🖥️ HMI (en desarrollo)
+
+Laboratorio web para monitorear, sintonizar y registrar el robot desde el PC o el celular. Plan, decisiones y fases en [docs/hmi/PLAN.md](docs/hmi/PLAN.md).
