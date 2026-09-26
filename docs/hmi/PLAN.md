@@ -4,7 +4,7 @@ Laboratorio de pruebas, análisis y monitoreo del prototipo real. Este documento
 arquitectura, el alcance de cada fase y el criterio con que se da por terminada. Se actualiza al cerrar
 cada fase.
 
-Estado: **F0 implementada, pendiente de validar en el robot** (2026-09-26). Rama de trabajo: `feat/hmi`.
+Estado: **F0 cerrada y validada en el robot** (2026-09-26): `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída. Rama de trabajo: `feat/hmi`.
 
 ---
 
@@ -189,7 +189,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 
 | Fase | Contenido | Se da por terminada cuando |
 |---|---|---|
-| **F0** ✅ código · ⏳ robot | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS; `hmi/tools/protocol_check.py`. | Desde el monitor serie se cambia `kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. `protocol_check.py --save` sin fallas. |
+| **F0** ✅ | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS; `hmi/tools/protocol_check.py`. | Desde el monitor serie se cambia `kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. `protocol_check.py --save` sin fallas. |
 | **F1** | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
 | **F2** | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
 | **F3** | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
