@@ -5,8 +5,9 @@
  * - 2D: la vista que mide. θ se lee contra la vertical punteada; la línea ámbar es el
  *   ángulo deseado (θ ref); el arco azul sobre la rueda es el PWM aplicado; la regla del
  *   piso se arrastra con la posición del eje.
- * - 3D: para presentar el robot. Arrastrar gira la cámara, la rueda del ratón acerca,
- *   "Reencuadrar" la devuelve al inicio. Cada rueda gira con su propia RPM.
+ * - 3D: para presentar el robot. Arrastrar (un dedo o el ratón) gira la cámara; la rueda
+ *   del ratón, el gesto de dos dedos del trackpad o pellizcar con dos dedos en pantalla
+ *   táctil acercan; "Reencuadrar" la devuelve al inicio. Cada rueda gira con su RPM.
  *
  * Se redibuja sólo cuando cambia la pose, la cámara o el tamaño.
  */
@@ -108,19 +109,50 @@ export class RobotScene {
   }
 
   private bindCamera() {
+    // Punteros activos: uno = girar, dos = pellizcar (zoom)
+    const pts = new Map<number, { x: number; y: number }>();
     let drag: { x: number; y: number; az: number; el: number } | null = null;
+    let pinch: { d: number; zoom: number } | null = null;
+    const spread = () => {
+      const [a, b] = [...pts.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const startDrag = (x: number, y: number) => (drag = { x, y, az: this.cam.az, el: this.cam.el });
     this.canvas.addEventListener('pointerdown', (e) => {
       if (this.view !== '3d') return;
-      drag = { x: e.clientX, y: e.clientY, az: this.cam.az, el: this.cam.el };
-      this.canvas.setPointerCapture(e.pointerId);
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* puntero ya liberado */
+      }
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) startDrag(e.clientX, e.clientY);
+      if (pts.size === 2) {
+        drag = null;
+        pinch = { d: spread(), zoom: this.cam.zoom };
+      }
     });
     this.canvas.addEventListener('pointermove', (e) => {
-      if (!drag) return;
-      this.cam.az = drag.az + (e.clientX - drag.x) * 0.008;
-      this.cam.el = Math.min(1.25, Math.max(0.07, drag.el + (e.clientY - drag.y) * 0.006));
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && pts.size >= 2) {
+        this.cam.zoom = Math.min(3, Math.max(0.5, pinch.zoom * (spread() / Math.max(1, pinch.d))));
+      } else if (drag) {
+        this.cam.az = drag.az + (e.clientX - drag.x) * 0.008;
+        this.cam.el = Math.min(1.25, Math.max(0.07, drag.el + (e.clientY - drag.y) * 0.006));
+      } else return;
       this.schedule();
     });
-    const end = () => (drag = null);
+    const end = (e: PointerEvent) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = null;
+      // De dos dedos a uno: seguir girando desde donde está, sin salto
+      if (pts.size === 1) {
+        const [p] = [...pts.values()];
+        startDrag(p.x, p.y);
+      }
+      if (pts.size === 0) drag = null;
+    };
     this.canvas.addEventListener('pointerup', end);
     this.canvas.addEventListener('pointercancel', end);
     this.canvas.addEventListener(

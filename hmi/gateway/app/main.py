@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import __version__
 from .config import lan_addresses, settings
 from .hub import Hub
 from .robot import RobotLink
@@ -55,7 +56,7 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
         await link.disconnect()
         db.close()
 
-    app = FastAPI(title="Gateway balancín", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Gateway balancín", version=__version__, lifespan=lifespan)
     app.state.link = link
     app.state.db = db
 
@@ -68,7 +69,7 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
         """Direcciones para abrir la HMI desde otro equipo (vacío si sólo escucha en este PC)."""
         public = settings.host in ("0.0.0.0", "::")
         urls = [f"http://{ip}:{settings.port}" for ip in await asyncio.to_thread(lan_addresses)] if public else []
-        return {"host": settings.host, "port": settings.port, "lan_urls": urls}
+        return {"version": __version__, "host": settings.host, "port": settings.port, "lan_urls": urls}
 
     @app.get("/api/transports")
     async def transports():

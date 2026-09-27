@@ -33,7 +33,7 @@ const TABLE_COLS: [keyof TelemetryRow, string, number][] = [
 ];
 
 function fmtDuration(ms: number | null): string {
-  if (ms === null || ms < 0) return '—';
+  if (ms === null || !Number.isFinite(ms) || ms < 0) return '—';
   const s = Math.round(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
@@ -199,7 +199,20 @@ export function setupHistory(root: HTMLElement, gw: Gateway, log: (m: string, ba
 
   async function loadData(s: Session) {
     $('#hNota').textContent = 'Cargando…';
-    const [data, events] = await Promise.all([api.sessionColumns(s.id), api.sessionEvents(s.id)]);
+    $('#hNota').classList.remove('err');
+    let data, events;
+    try {
+      [data, events] = await Promise.all([api.sessionColumns(s.id), api.sessionEvents(s.id)]);
+    } catch (e) {
+      if (current?.id !== s.id) return;
+      times = [];
+      poses = [];
+      traces.load([], {});
+      seekIndex(0);
+      $('#hNota').textContent = `No se pudieron cargar los datos: ${(e as Error).message}. Si acabas de actualizar la HMI, reinicia el gateway.`;
+      $('#hNota').classList.add('err');
+      return;
+    }
     if (current?.id !== s.id) return;
     step = data.step;
     const c = data.columns;

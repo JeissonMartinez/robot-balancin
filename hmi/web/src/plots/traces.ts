@@ -251,6 +251,7 @@ export class Traces {
     const tick = cssVar('--line');
     const markerColor = cssVar('--marker');
     const font = '11px "JetBrains Mono", Menlo, monospace';
+    const yFont = '9.5px "JetBrains Mono", Menlo, monospace';
 
     const zoomAll = (from: uPlot) => {
       if (from.select.width < 4 || !this.paused) {
@@ -323,7 +324,8 @@ export class Traces {
             grid: { stroke: grid, width: 1 }, ticks: { stroke: tick, width: 1, size: 4 },
             values: idx === PLOTS.length - 1 ? undefined : () => [],
           },
-          { stroke: ink3, font, size: 50, grid: { stroke: grid, width: 1 }, ticks: { stroke: tick, width: 1, size: 4 } },
+          // Eje y: letra pequeña y marcas cada ≥ 18 px, para leer el rango aun en gráficos bajos
+          { stroke: ink3, font: yFont, size: 44, space: 18, gap: 3, grid: { stroke: grid, width: 1 }, ticks: { stroke: tick, width: 1, size: 3 } },
         ],
         hooks: {
           setSelect: [zoomAll],

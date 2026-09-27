@@ -64,6 +64,14 @@ primero) y **Conectar**. Sin robot, **Robot simulado** permite probar todo.
 - Los datos quedan en `hmi/gateway/data/balancin.db` (fuera de git). Cómo revisarlos:
   [GATEWAY.md §5](../docs/hmi/GATEWAY.md#5-revisar-la-base-de-datos).
 
+## Actualizar
+
+Tras `git pull` (o cualquier cambio en `hmi/`): `npm run build` en `hmi/web` y **reiniciar el
+gateway**. El gateway sirve la HMI desde el disco, así que una página nueva con un gateway viejo
+falla en las funciones nuevas; la HMI lo avisa en el registro («El gateway es v… y la HMI v…»).
+Las versiones están en `hmi/gateway/app/__init__.py` y `HMI_VERSION` en `hmi/web/src/main.ts`, y se
+suben juntas.
+
 ## Desarrollar
 
 ```bash
@@ -119,7 +127,8 @@ En pantallas táctiles los controles miden al menos ~40 px de alto.
 
 - **2D** (la que mide): θ contra la vertical punteada; línea ámbar = θ ref; arco azul sobre la
   rueda = PWM aplicado (sentido y magnitud); regla del piso cada 5 cm. **Centrar** pone el eje en 0.
-- **3D**: arrastrar gira la cámara, la rueda del ratón acerca, **Reencuadrar** vuelve al inicio.
+- **3D**: arrastrar (ratón o un dedo) gira la cámara; la rueda del ratón, dos dedos en el trackpad o
+  **pellizcar con dos dedos** en la tablet acercan; **Reencuadrar** vuelve al inicio.
 - La posición no viene en la telemetría: se integra la media de las RPM de las dos ruedas (si el
   encoder izquierdo falla, la posición deriva).
 - Las medidas del robot dibujado salen del simulador; para que se parezca al prototipo, corregirlas

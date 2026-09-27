@@ -6,7 +6,7 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './styles/layout.css';
 
-import { Gateway } from './core/gateway';
+import { Gateway, api } from './core/gateway';
 import { Traces } from './plots/traces';
 import { PoseIntegrator } from './scene/pose';
 import { RobotScene } from './scene/scene';
@@ -20,6 +20,9 @@ import { setupTheme } from './ui/theme';
 import { setupTiles } from './ui/tiles';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+
+/** Debe coincidir con __version__ del gateway (hmi/gateway/app/__init__.py). */
+const HMI_VERSION = '0.3.1';
 
 const gw = new Gateway();
 
@@ -140,5 +143,19 @@ function renderSafety() {
 }
 gw.on('status', renderSafety);
 gw.on('link', renderSafety);
+
+// El gateway sirve la HMI desde el disco: tras actualizar el código, una página nueva puede
+// quedar hablando con un gateway viejo que no conoce sus rutas. Se avisa en el registro.
+gw.on('link', async (up) => {
+  if (!up) return;
+  try {
+    const { version } = await api.info();
+    if (version !== HMI_VERSION) {
+      log.add('hmi', `El gateway es ${version ? `v${version}` : 'de una versión anterior'} y la HMI v${HMI_VERSION}: reiniciar el gateway (Ctrl+C y volver a arrancarlo).`, 'bad');
+    }
+  } catch {
+    /* sin gateway */
+  }
+});
 
 gw.start();
