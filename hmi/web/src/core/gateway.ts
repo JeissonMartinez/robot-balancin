@@ -156,8 +156,12 @@ export const api = {
   info: () => request<{ version?: string; host: string; port: number; lan_urls: string[] }>('GET', '/api/info'),
   transports: () =>
     request<{ serial: { ports: SerialPortInfo[]; baud: number }; wifi?: { host: string } }>('GET', '/api/transports'),
-  connect: (transport: 'serial' | 'wifi' | 'demo', opts: { port?: string; host?: string } = {}) =>
-    request<Status>('POST', '/api/connect', { transport, ...opts }),
+  connect: (
+    transport: 'serial' | 'wifi' | 'mqtt' | 'demo',
+    opts: { port?: string; host?: string; robot?: string; mqtt_port?: number } = {},
+  ) => request<Status>('POST', '/api/connect', { transport, ...opts }),
+  mqttRobots: (broker: string, port = 1883) =>
+    request<{ robot: string; status: string }[]>('GET', `/api/mqtt/robots?broker=${encodeURIComponent(broker)}&port=${port}`),
   disconnect: () => request<Status>('POST', '/api/disconnect'),
   paramSets: () => request<ParamSet[]>('GET', '/api/param-sets'),
   saveParamSet: (body: { name: string; notes?: string; params?: Params; overwrite?: boolean }) =>

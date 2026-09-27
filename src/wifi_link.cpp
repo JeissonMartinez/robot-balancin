@@ -290,7 +290,7 @@ void wifiInit()
     req->send(200, "application/json", body);
   });
 
-  consoleSetMirror(&wsLog, rxPending);
+  consoleAddMirror(&wsLog, rxPending);
   applyConfig();
 }
 
@@ -443,6 +443,16 @@ bool wifiConfigure(JsonObjectConst in, String &err)
   if (!applyAtMs)
     applyAtMs = 1;
   return true;
+}
+
+const String &wifiHostname()
+{
+  return hostname;
+}
+
+bool wifiNetworkUp()
+{
+  return active == Active::AP || active == Active::ApFallback || (active == Active::Sta && WiFi.status() == WL_CONNECTED);
 }
 
 void wifiPrintInfo(Print &out)

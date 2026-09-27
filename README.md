@@ -24,6 +24,7 @@ Firmware para un **robot balancín** (péndulo invertido sobre dos ruedas) basad
 - 🎚️ **Parámetros ajustables en ejecución** (ganancias, estructura, RN, zona muerta, seguridad) por comandos JSON, validados y guardables en NVS. Base de la [HMI](#️-hmi-en-desarrollo).
 - 🛑 **Parada de emergencia** remota.
 - 📶 **WiFi**: red propia `Balancin-XXXX` (clave única por robot) o red local, con WebSocket para la HMI; el control sigue solo en su núcleo.
+- 📡 **MQTT** opcional (`balancin/<robot>/in|out|status`) para usar un broker como Mosquitto.
 
 ---
 
@@ -140,6 +141,7 @@ Los motorreductores (1:119) se comportan casi como fuentes de velocidad. Con el 
 | `include/config.h` | Pines, PWM, encoders y valores de fábrica de los parámetros ajustables. |
 | `params.h/.cpp` | Parámetros activos en RAM: validación, cambio en ejecución, NVS y descripción (`schema`). |
 | `wifi_link.h/.cpp` | WiFi (red propia / red local / apagado, en NVS), servidor WebSocket y mDNS. Los comandos por WiFi se atienden en `loop()`. |
+| `mqtt_link.h/.cpp` | Canal MQTT opcional (esp-mqtt), configuración en NVS. |
 | `console.h/.cpp` | Salida de texto para humanos por Serial y WiFi a la vez. |
 | `protocol.h/.cpp` | Protocolo con la HMI: comandos JSON, respuestas y formato de telemetría ([PROTOCOLO.md](docs/hmi/PROTOCOLO.md)). |
 | `encoders.h/.cpp` | ISRs de encoders (IRAM-safe), lectura atómica y RPM filtradas. |

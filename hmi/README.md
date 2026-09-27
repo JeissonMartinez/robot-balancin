@@ -13,7 +13,8 @@ robot ──USB 921600 ─────┐
 |---|---|---|
 | `gateway/` | Enlace con el robot, API y base de datos | [GATEWAY.md](../docs/hmi/GATEWAY.md) |
 | `web/` | Interfaz (TypeScript + Vite, sin framework) | este archivo |
-| `tools/` | `protocol_check.py`: verificación del protocolo con el robot | [PROTOCOLO.md](../docs/hmi/PROTOCOLO.md) |
+| `tools/` | `protocol_check.py` (verificación del protocolo, por USB o `--ws`), `link_bench.py` (medición de enlaces) | [PROTOCOLO.md](../docs/hmi/PROTOCOLO.md) |
+| `docker-compose.yml`, `mosquitto/` | Broker MQTT opcional (F5) | este archivo |
 
 ## Requisitos
 
@@ -43,6 +44,7 @@ Abrir <http://127.0.0.1:8000>, elegir el transporte y **Conectar**:
 
 - **USB**: el puerto del robot (el adaptador USB sale primero).
 - **WiFi** (fw ≥ 0.4.0): ver abajo.
+- **MQTT** (fw ≥ 0.5.0, opcional): ver abajo.
 - **Simulado**: un robot simulado dentro del gateway, para probar sin hardware.
 
 ### Sin cable (WiFi)
@@ -103,6 +105,30 @@ Verificar el protocolo por WiFi: `hmi/gateway/.venv/bin/python hmi/tools/protoco
 - Los datos quedan en `hmi/gateway/data/balancin.db` (fuera de git). Cómo revisarlos:
   [GATEWAY.md §5](../docs/hmi/GATEWAY.md#5-revisar-la-base-de-datos).
 
+### MQTT (opcional)
+
+Alternativa al WiFi directo, con un broker en medio. Pensada para despliegues con varios robots o un
+servidor remoto; en el aula el WiFi directo es más simple (ver la comparación en `docs/hmi/PLAN.md`).
+
+1. Broker en el PC: `docker compose -f hmi/docker-compose.yml up -d mosquitto`, o sin Docker
+   `mosquitto -c hmi/mosquitto/mosquitto-local.conf` (Homebrew: `brew install mosquitto`).
+2. Robot conectado (USB o WiFi) → **WiFi del robot → MQTT** → activar, **Este PC** (IP del broker)
+   → **Guardar**. El robot necesita estar en una red donde vea al PC.
+3. **Conexión → MQTT**: broker `127.0.0.1` (el gateway corre en el mismo PC), **Buscar**, elegir
+   el robot, **Conectar**.
+
+### Medir un enlace
+
+Con el gateway desconectado del robot:
+
+```bash
+hmi/gateway/.venv/bin/python hmi/tools/link_bench.py --serial /dev/cu.wchusbserial...
+hmi/gateway/.venv/bin/python hmi/tools/link_bench.py --ws 192.168.4.1
+hmi/gateway/.venv/bin/python hmi/tools/link_bench.py --mqtt 192.168.1.7 --robot balancin-b884
+```
+
+Ida y vuelta de un comando (p50/p95), telemetría recibida, tramas perdidas y jitter de llegada.
+
 ## Actualizar
 
 Tras `git pull` (o cualquier cambio en `hmi/`): `npm run build` en `hmi/web` y **reiniciar el
@@ -146,7 +172,7 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | `main.py` | Rutas REST y WebSocket; sirve `web/dist` si existe |
 | `robot.py` | `RobotLink`: configuración del robot, comandos con ack, sesiones, reparto de telemetría |
 | `hub.py` | Clientes WebSocket conectados |
-| `transports/` | `serial_port.py`, `demo.py` (robot simulado); en F4 WebSocket, en F5 MQTT |
+| `transports/` | `serial_port.py`, `websocket.py` (WiFi), `mqtt.py`, `demo.py` (robot simulado) |
 | `storage/db.py` | SQLite: sesiones, telemetría, eventos, juegos de parámetros |
 
 ### Tamaños de pantalla

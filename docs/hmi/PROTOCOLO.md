@@ -1,7 +1,7 @@
 # Protocolo robot ↔ HMI (v1)
 
 Mensajes entre el firmware del balancín y el gateway de la HMI. El protocolo es el mismo sobre
-cualquier transporte: Serial (USB) y WebSocket (WiFi, desde fw 0.4.0).
+cualquier transporte: Serial (USB), WebSocket (WiFi, desde fw 0.4.0) y MQTT (desde fw 0.5.0).
 
 Implementación: [`src/protocol.cpp`](../../src/protocol.cpp), parámetros en
 [`src/params.cpp`](../../src/params.cpp). Verificación con el robot conectado:
@@ -46,6 +46,25 @@ en la tarea de red: una calibración no bloquea el WiFi. Durante la prueba de zo
 mensaje recibido por cualquiera de los dos canales la aborta; a diferencia del Serial, por WiFi el
 comando no se pierde y se atiende al terminar.
 
+### Transporte MQTT (opcional)
+
+Con un broker (Mosquitto) en la red. El robot publica y se suscribe con su nombre de red
+(`balancin-xxxx`):
+
+| Tema | Sentido | Contenido |
+|---|---|---|
+| `balancin/<robot>/in` | → robot | Comandos (un mensaje = una línea) |
+| `balancin/<robot>/out` | robot → | Todo lo demás: `ack`, `hello`, logs, telemetría |
+| `balancin/<robot>/status` | robot → | `online` / `offline`, retenido. `offline` es el testamento (LWT): el broker lo publica si el robot se cae |
+
+- QoS 0 para comandos y datos; QoS 1 retenido para el estado.
+- La telemetría de este canal arranca **apagada**; el gateway la activa con `tel` al conectarse y
+  la apaga al desconectarse.
+- `hello` se publica sólo en la **primera** conexión al broker tras encender, para que el gateway
+  distinga un reinicio real de una reconexión.
+- Si la cola de salida supera 16 kB (broker lento), se descarta telemetría (se ve en `seq`).
+- Se configura con el comando `mqtt` (§5b).
+
 ---
 
 ## 2. Mensajes del robot
@@ -55,7 +74,7 @@ comando no se pierde y se atiende al terminar.
 Al arrancar y como respuesta a `hello`.
 
 ```json
-{"type":"hello","fw":"0.4.0","proto":1,"period_ms":20,"structure":"SpeedOuter","params_src":"nvs"}
+{"type":"hello","fw":"0.5.0","proto":1,"period_ms":20,"structure":"SpeedOuter","params_src":"nvs"}
 ```
 
 | Campo | Significado |
@@ -130,6 +149,7 @@ responden al terminar.
 | `estop` | — | Parada de emergencia: motores off y sin re-armado | — | `e` |
 | `arm` | — | Libera la parada. El control se activa al poner el robot vertical | — | `a` |
 | `tel` | `on: bool`, `fmt: "json"\|"text"`, `div: 1…50` (todos opcionales) | Configura la telemetría **del canal por el que llega** (Serial o WiFi) | `on`, `fmt`, `div`, `dropped` | `t` (on/off), `j` (JSON 50 Hz / texto 10 Hz) |
+| `mqtt` | `set: {enabled, host, port}` (opcional) | Sin `set`: estado del canal MQTT. Con `set`: valida, guarda en NVS y reconecta (§5b) | `mqtt` (estado) | |
 | `wifi` | `set: {mode, ssid, pass, ap_pass}` (opcional) | Sin `set`: estado del WiFi. Con `set`: valida, guarda en NVS y aplica 0.5 s después (ver §5) | `wifi` (estado) | `w` (imprime el estado) |
 
 Ejemplos:
@@ -236,6 +256,25 @@ Ejemplos:
 
 Cambiar el WiFi no detiene el control. Si el cambio se hace por WiFi, la conexión se corta al
 aplicarlo.
+
+---
+
+## 5b. MQTT (fw ≥ 0.5.0)
+
+Apagado por defecto. Estado (`ack` de `mqtt`):
+
+```json
+{"enabled":true,"host":"192.168.1.7","port":1883,"connected":true,"topic":"balancin/balancin-b884"}
+```
+
+```json
+{"type":"cmd","id":1,"cmd":"mqtt","set":{"enabled":true,"host":"192.168.1.7","port":1883}}
+{"type":"cmd","id":2,"cmd":"mqtt","set":{"enabled":false}}
+```
+
+El robot necesita una red con el broker: en su red propia, el broker corre en el PC unido a ella
+(`192.168.4.2`); en red local, en cualquier equipo de esa red. El cliente reintenta solo si el broker
+no está.
 
 ---
 

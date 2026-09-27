@@ -45,5 +45,11 @@ void wifiStatusJson(JsonObject out);
  */
 bool wifiConfigure(JsonObjectConst in, String &err);
 
+/** @return Nombre del robot en la red ("balancin-b884"); identifica al robot en MQTT. */
+const String &wifiHostname();
+
+/** @return true si la radio tiene una red utilizable (red propia activa o conectado a la local). */
+bool wifiNetworkUp();
+
 /** Imprime en la consola cómo conectarse (red, clave, dirección). */
 void wifiPrintInfo(Print &out);

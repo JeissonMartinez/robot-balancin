@@ -6,6 +6,7 @@ cada fase.
 
 Estado (2026-09-26):
 - **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
+- **F5 implementada** (fw 0.5.0): canal MQTT opcional en el firmware (esp-mqtt, apagado por defecto), transporte MQTT y búsqueda de robots en el gateway, opción MQTT en la HMI, Mosquitto en Docker o nativo, y `link_bench.py` para medir. Pruebas con Mosquitto local y robot simulado. Falta medir con el robot y decidir (tabla abajo).
 - **F4 implementada** (fw 0.4.0): WiFi con red propia por defecto (clave única por robot) o red local con respaldo, WebSocket, mDNS, canales Serial/WiFi independientes; gateway con transporte WiFi y reconexión automática; HMI con opción WiFi y tarjeta «WiFi del robot». Compila; gateway probado contra un robot simulado por WebSocket. Falta cargar el firmware y probar con el robot.
 - **F3 cerrada y validada en el robot**: escena 2D/3D en vivo, historial con reproducción, tabla, eventos y CSV, desde PC, iPad y celular.
 - **F2 cerrada y validada en el robot** (parámetros en vivo y por lotes, validación, juegos, exportar, calibración y zona muerta).
@@ -60,6 +61,7 @@ Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno
 | 2026-09-26 | WebSocket con `esp32async/ESPAsyncWebServer` (tarea de red en el núcleo 0); los comandos se encolan y se atienden en `loop()`. Serial y WiFi son canales con telemetría independiente. |
 | 2026-09-26 | El gateway reintenta solo las conexiones WiFi perdidas (cada 2 s). |
 | 2026-09-26 | Corrección fw 0.4.0: el servidor web se arranca después de encender la radio (antes abortaba en el arranque: lwIP aún no existía). |
+| 2026-09-26 | Evaluado y descartado por ahora: HMI servida por el propio robot para usarlo sólo con tablet (sin PC). Se sigue con el plan original. Con varias pantallas, robot en red local con router (la red propia del ESP32 no da abasto para reenviar tráfico entre equipos). |
 
 ---
 
@@ -217,8 +219,20 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 | **F2** ✅ | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
 | **F3** ✅ | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
 | **F4** ✅ código · ⏳ robot | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
-| **F5** | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
+| **F5** ✅ código · ⏳ medición | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
 | **F6** | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |
+
+### Medición de enlaces (F5)
+
+`hmi/tools/link_bench.py`, mismo robot, 100 comandos y 20 s de telemetría a 50 Hz. Pendiente de
+completar con el robot.
+
+| Enlace | Ida y vuelta p50 / p95 [ms] | Telemetría [Hz] | Perdidas | Jitter de llegada p95 / máx [ms] |
+|---|---|---|---|---|
+| USB (Serial 921600) | | | | |
+| WiFi WebSocket (red propia) | | | | |
+| WiFi WebSocket (red local) | | | | |
+| MQTT (red local, broker en el PC) | | | | |
 
 ---
 

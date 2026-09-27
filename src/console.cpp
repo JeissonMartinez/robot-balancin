@@ -2,36 +2,41 @@
 
 namespace
 {
+const int MAX_MIRRORS = 3;
+
 class TeePrint : public Print
 {
 public:
-  Print *mirror = nullptr;
+  Print *mirrors[MAX_MIRRORS] = {};
+  int n = 0;
   size_t write(uint8_t c) override
   {
     Serial.write(c);
-    if (mirror)
-      mirror->write(c);
+    for (int i = 0; i < n; i++)
+      mirrors[i]->write(c);
     return 1;
   }
-  size_t write(const uint8_t *buf, size_t n) override
+  size_t write(const uint8_t *buf, size_t len) override
   {
-    Serial.write(buf, n);
-    if (mirror)
-      mirror->write(buf, n);
-    return n;
+    Serial.write(buf, len);
+    for (int i = 0; i < n; i++)
+      mirrors[i]->write(buf, len);
+    return len;
   }
 };
 
 TeePrint tee;
-bool (*mirrorInputPending)() = nullptr;
+bool (*pendingChecks[MAX_MIRRORS])() = {};
 } // namespace
 
 Print &Console = tee;
 
-void consoleSetMirror(Print *mirror, bool (*inputPending)())
+void consoleAddMirror(Print *mirror, bool (*inputPending)())
 {
-  tee.mirror = mirror;
-  mirrorInputPending = inputPending;
+  if (tee.n >= MAX_MIRRORS)
+    return;
+  pendingChecks[tee.n] = inputPending;
+  tee.mirrors[tee.n++] = mirror;
 }
 
 bool consoleAbortRequested()
@@ -44,5 +49,8 @@ bool consoleAbortRequested()
     if (c != '\r' && c != '\n')
       pressed = true;
   }
-  return pressed || (mirrorInputPending && mirrorInputPending());
+  for (int i = 0; i < tee.n; i++)
+    if (pendingChecks[i] && pendingChecks[i]())
+      pressed = true;
+  return pressed;
 }

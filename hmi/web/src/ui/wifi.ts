@@ -8,8 +8,11 @@
  * - Apagado.
  * Funciona con el robot conectado por USB o por WiFi (comando "wifi" del protocolo).
  * La clave de la red local nunca vuelve del robot: sólo se sabe si está guardada.
+ *
+ * Sección MQTT (opcional, fw ≥ 0.5.0): activar el canal MQTT del robot y apuntarlo al
+ * broker (normalmente este PC, con Mosquitto). Comando "mqtt" del protocolo.
  */
-import type { Gateway } from '../core/gateway';
+import { api, type Gateway } from '../core/gateway';
 import { confirmDialog, escapeHtml } from './dialog';
 
 interface WifiStatus {
@@ -24,6 +27,14 @@ interface WifiStatus {
   ip?: string;
   rssi?: number;
   clients: number;
+}
+
+interface MqttStatus {
+  enabled: boolean;
+  host: string;
+  port: number;
+  connected: boolean;
+  topic: string;
 }
 
 const ACTIVE_LABEL: Record<WifiStatus['active'], string> = {
@@ -52,6 +63,21 @@ export function setupWifi(root: HTMLElement, gw: Gateway, log: (m: string, bad?:
           <button class="btn primary" type="button" id="wfAplicar">Guardar y aplicar</button>
         </div>
       </details>
+      <details class="grupo" id="mqCambiar" hidden>
+        <summary>MQTT (opcional)<span class="n" id="mqEstado"></span></summary>
+        <div class="grupo-body">
+          <label class="switch"><input type="checkbox" id="mqActivo"> Publicar por MQTT</label>
+          <div class="field"><span>Broker (IP de este PC u otro)</span>
+            <div class="row">
+              <input type="text" id="mqHost" style="flex:1" placeholder="192.168.1.7" autocapitalize="off" autocorrect="off" spellcheck="false">
+              <button class="btn small" type="button" id="mqEstePc" title="Usar la IP de este PC en la red">Este PC</button>
+            </div>
+          </div>
+          <div class="field"><span>Puerto</span><input type="number" id="mqPuerto" min="1" max="65535" value="1883"></div>
+          <div class="muted wifi-nota" id="mqNota"></div>
+          <button class="btn primary" type="button" id="mqGuardar">Guardar</button>
+        </div>
+      </details>
     </div>`;
 
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!;
@@ -64,6 +90,11 @@ export function setupWifi(root: HTMLElement, gw: Gateway, log: (m: string, bad?:
   const apPass = $<HTMLInputElement>('#wfApPass');
   const nota = $('#wfNota');
   let status: WifiStatus | null = null;
+  let mqtt: MqttStatus | null = null;
+  const mqBox = $<HTMLDetailsElement>('#mqCambiar');
+  const mqActivo = $<HTMLInputElement>('#mqActivo');
+  const mqHost = $<HTMLInputElement>('#mqHost');
+  const mqPuerto = $<HTMLInputElement>('#mqPuerto');
   let mode: WifiStatus['mode'] = 'ap';
   let showPass = false;
 
@@ -100,6 +131,11 @@ export function setupWifi(root: HTMLElement, gw: Gateway, log: (m: string, bad?:
       showPass = !showPass;
       render();
     });
+    mqBox.hidden = !mqtt;
+    if (mqtt) {
+      $('#mqEstado').textContent = !mqtt.enabled ? 'apagado' : mqtt.connected ? `conectado a ${mqtt.host}` : `sin conexión con ${mqtt.host}`;
+      $('#mqNota').textContent = `Temas: ${mqtt.topic}/in · /out · /status. El robot necesita una red con el broker: su red propia (broker en el PC unido a ella) o la red local.`;
+    }
   }
 
   async function refresh() {
@@ -117,6 +153,13 @@ export function setupWifi(root: HTMLElement, gw: Gateway, log: (m: string, bad?:
       return;
     }
     status = ack.wifi as WifiStatus;
+    const mq = await gw.command('mqtt');
+    mqtt = mq.ok ? (mq.mqtt as MqttStatus) : null; // firmware < 0.5.0: sin MQTT
+    if (mqtt) {
+      mqActivo.checked = mqtt.enabled;
+      mqHost.value = mqtt.host;
+      mqPuerto.value = String(mqtt.port);
+    }
     ssid.value = status.ssid;
     apPass.value = status.ap_pass_default ? '' : status.ap_pass;
     pass.value = '';
@@ -149,6 +192,26 @@ export function setupWifi(root: HTMLElement, gw: Gateway, log: (m: string, bad?:
     status = ack.wifi as WifiStatus;
     render();
     setTimeout(refresh, 4000); // el estado real (IP, conexión) llega unos segundos después
+  });
+
+  $('#mqEstePc').addEventListener('click', async () => {
+    try {
+      const { lan_urls } = await api.info();
+      const ip = lan_urls[0]?.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+      if (ip) mqHost.value = ip;
+      else log('Para saber la IP de este PC, arrancar el gateway con --host 0.0.0.0', true);
+    } catch {
+      /* sin gateway */
+    }
+  });
+  $('#mqGuardar').addEventListener('click', async () => {
+    const set = { enabled: mqActivo.checked, host: mqHost.value.trim(), port: Number(mqPuerto.value) || 1883 };
+    const ack = await gw.command('mqtt', { set });
+    if (!ack.ok) return log(`MQTT: ${ack.err}`, true);
+    mqtt = ack.mqtt as MqttStatus;
+    log(set.enabled ? `MQTT del robot: broker ${set.host}:${set.port}` : 'MQTT del robot apagado');
+    render();
+    setTimeout(refresh, 3000);
   });
 
   let lastState = '';

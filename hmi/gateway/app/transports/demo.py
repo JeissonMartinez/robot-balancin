@@ -110,6 +110,7 @@ class DemoTransport(Transport):
         self.wifi = {"mode": "ap", "active": "ap", "hostname": "balancin-demo.local", "ap_ssid": "Balancin-DEMO",
                      "ap_pass": "bal-000000", "ap_pass_default": True, "ssid": "", "pass_set": False,
                      "ip": "192.168.4.1", "clients": 0}
+        self.mqtt = {"enabled": False, "host": "", "port": 1883, "connected": False, "topic": "balancin/balancin-demo"}
         self._task: asyncio.Task | None = None
         self._on_line: LineHandler | None = None
 
@@ -208,6 +209,14 @@ class DemoTransport(Transport):
                 self.wifi.update(mode=mode, active=mode, ssid=new.get("ssid", self.wifi["ssid"]),
                                  pass_set=bool(new.get("pass")) or self.wifi["pass_set"])
             return self._ack(mid, True, wifi=dict(self.wifi))
+        if cmd == "mqtt":
+            new = msg.get("set")
+            if isinstance(new, dict):
+                if new.get("enabled") and not (new.get("host") or self.mqtt["host"]):
+                    return self._ack(mid, False, "host: IP o nombre del broker (1 a 63 caracteres)")
+                self.mqtt.update({k: new[k] for k in ("enabled", "host", "port") if k in new})
+                self.mqtt["connected"] = False  # el simulado no tiene broker
+            return self._ack(mid, True, mqtt=dict(self.mqtt))
         if cmd == "tel":
             if "on" in msg:
                 self.tel["on"] = bool(msg["on"])

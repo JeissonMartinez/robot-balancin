@@ -23,7 +23,7 @@ import { setupWifi } from './ui/wifi';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /** Debe coincidir con __version__ del gateway (hmi/gateway/app/__init__.py). */
-const HMI_VERSION = '0.4.0';
+const HMI_VERSION = '0.5.0';
 
 const gw = new Gateway();
 

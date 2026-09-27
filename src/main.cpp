@@ -10,6 +10,7 @@
 #include "tasks_block.h"
 #include "console.h"
 #include "wifi_link.h"
+#include "mqtt_link.h"
 
 // Devuelve true una vez por pulsación: LOW estable BTN_DEBOUNCE_MS y luego soltado.
 static bool calibrationButtonPressed()
@@ -154,12 +155,15 @@ static void pumpTelemetry()
   Telemetry t;
   const TelemetryOutput &s = serialChannel.tel;
   Channel &w = wifiChannel();
+  Channel &m = mqttChannel();
   while (receiveTelemetry(t))
   {
     if (s.enabled && t.seq % s.div == 0)
       protocolWriteTelemetry(t, Serial, s.json);
     if (w.tel.enabled && t.seq % w.tel.div == 0 && wifiHasClients() && wifiCanSend())
       protocolWriteTelemetry(t, w.out, w.tel.json);
+    if (m.tel.enabled && t.seq % m.tel.div == 0 && mqttCanSend())
+      protocolWriteTelemetry(t, m.out, m.tel.json);
   }
 }
 
@@ -193,6 +197,7 @@ void setup()
 
   startControlTask();
   wifiInit();
+  mqttInit();
 
   Console.printf("Firmware %s · protocolo v%d\n", FW_VERSION, PROTOCOL_VERSION);
   Console.printf("Parámetros: %s\n", paramsLoadedFromNvs() ? "guardados en NVS" : "de fábrica (config.h)");
@@ -215,6 +220,7 @@ void loop()
 
   pollSerial();
   wifiLoop();
+  mqttLoop();
   pumpTelemetry();
   delay(5);
 }

@@ -24,16 +24,19 @@ from .robot import RobotLink
 from .storage.db import TEL_FIELDS, Database
 from .transports.demo import DemoTransport
 from .transports.serial_port import DEFAULT_BAUD, SerialTransport, available_ports
+from .transports.mqtt import DEFAULT_BROKER, DEFAULT_PORT as MQTT_PORT, MqttTransport, discover_robots
 from .transports.websocket import DEFAULT_HOST, WebSocketTransport
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 
 class ConnectRequest(BaseModel):
-    transport: Literal["serial", "wifi", "demo"]
+    transport: Literal["serial", "wifi", "mqtt", "demo"]
     port: str | None = None  # serial
     baud: int = DEFAULT_BAUD
-    host: str | None = None  # wifi: IP, nombre .local o URL ws://
+    host: str | None = None  # wifi: IP, nombre .local o URL ws://; mqtt: broker
+    robot: str | None = None  # mqtt: nombre del robot (balancin-xxxx)
+    mqtt_port: int = MQTT_PORT
 
 
 class SessionPatch(BaseModel):
@@ -80,7 +83,16 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
     @app.get("/api/transports")
     async def transports():
         ports = await asyncio.to_thread(available_ports)
-        return {"serial": {"ports": ports, "baud": DEFAULT_BAUD}, "wifi": {"host": DEFAULT_HOST}, "demo": {}}
+        return {"serial": {"ports": ports, "baud": DEFAULT_BAUD}, "wifi": {"host": DEFAULT_HOST},
+                "mqtt": {"broker": DEFAULT_BROKER, "port": MQTT_PORT}, "demo": {}}
+
+    @app.get("/api/mqtt/robots")
+    async def mqtt_robots(broker: str = DEFAULT_BROKER, port: int = MQTT_PORT):
+        """Robots anunciados en el broker (estado retenido online/offline)."""
+        try:
+            return await asyncio.to_thread(discover_robots, broker, port)
+        except ConnectionError as e:
+            raise HTTPException(502, str(e))
 
     @app.get("/api/status")
     async def status():
@@ -97,6 +109,12 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
             host = req.host or DEFAULT_HOST
             transport = WebSocketTransport(host)
             reconnect = lambda: WebSocketTransport(host)  # noqa: E731
+        elif req.transport == "mqtt":
+            if not req.robot:
+                raise HTTPException(400, "falta el robot")
+            broker, robot_id, mport = req.host or DEFAULT_BROKER, req.robot, req.mqtt_port
+            transport = MqttTransport(broker, robot_id, mport)
+            reconnect = lambda: MqttTransport(broker, robot_id, mport)  # noqa: E731
         elif req.transport == "demo":
             transport = DemoTransport()
         try:

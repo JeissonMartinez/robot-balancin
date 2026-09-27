@@ -25,7 +25,7 @@ log = logging.getLogger("robot")
 
 PROTOCOL_VERSION = 1
 # Comandos que la HMI puede enviar. `tel` no: la telemetría la administra el gateway.
-CLIENT_COMMANDS = {"hello", "get", "schema", "set", "defaults", "save", "calib", "deadband", "estop", "arm", "wifi"}
+CLIENT_COMMANDS = {"hello", "get", "schema", "set", "defaults", "save", "calib", "deadband", "estop", "arm", "wifi", "mqtt"}
 TIMEOUTS = {"save": 6.0, "calib": 8.0, "deadband": 40.0}
 DEFAULT_TIMEOUT = 2.0
 TICK = 0.1  # s, período del lazo de reparto
@@ -123,10 +123,12 @@ class RobotLink:
         self._stop_retry()
         if not self.transport:
             return  # ya desconectado: nada que registrar
-        if self.state == "connected" and self.transport.kind == "serial":
-            # Deja el monitor serie como estaba: texto a 10 Hz
+        if self.state == "connected" and self.transport.kind in ("serial", "mqtt"):
+            # Serie: deja el monitor como estaba (texto a 10 Hz). MQTT: deja de publicar
+            # telemetría en el broker (nadie más la pidió)
+            restore = {"fmt": "text", "div": 5, "on": True} if self.transport.kind == "serial" else {"on": False}
             try:
-                await self._command_raw("tel", {"fmt": "text", "div": 5, "on": True}, timeout=0.5)
+                await self._command_raw("tel", restore, timeout=0.5)
             except Exception:
                 pass
         self._event("disconnect", {"target": self.transport.target})

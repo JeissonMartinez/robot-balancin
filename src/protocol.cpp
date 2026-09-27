@@ -5,6 +5,7 @@
 #include "params.h"
 #include "console.h"
 #include "wifi_link.h"
+#include "mqtt_link.h"
 #include <ArduinoJson.h>
 
 static void send(JsonDocument &doc, Print &out)
@@ -171,6 +172,24 @@ static void handleWifi(JsonDocument &in, Print &out, JsonVariantConst id)
   send(doc, out);
 }
 
+static void handleMqtt(JsonDocument &in, Print &out, JsonVariantConst id)
+{
+  if (!in["set"].isNull())
+  {
+    if (!in["set"].is<JsonObjectConst>())
+      return ack(out, id, false, "set debe ser un objeto");
+    String err;
+    if (!mqttConfigure(in["set"].as<JsonObjectConst>(), err))
+      return ack(out, id, false, err);
+  }
+  JsonDocument doc;
+  doc["type"] = "ack";
+  doc["id"] = id;
+  doc["ok"] = true;
+  mqttStatusJson(doc["mqtt"].to<JsonObject>());
+  send(doc, out);
+}
+
 void protocolHandleLine(const char *line, Channel &ch)
 {
   Print &out = ch.out;
@@ -240,6 +259,8 @@ void protocolHandleLine(const char *line, Channel &ch)
     return handleTel(in, ch, id);
   if (strcmp(cmd, "wifi") == 0)
     return handleWifi(in, out, id);
+  if (strcmp(cmd, "mqtt") == 0)
+    return handleMqtt(in, out, id);
 
   ack(out, id, false, String("comando desconocido: ") + cmd);
 }

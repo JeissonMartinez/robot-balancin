@@ -16,7 +16,7 @@ Base: `http://<host>:8000`. Sin autenticación todavía (ver PLAN §8): por defe
 | `GET /api/health` | — | `{"ok": true}` |
 | `GET /api/transports` | — | Puertos serie disponibles (`usb: true` primero) y velocidad |
 | `GET /api/status` | — | Estado del enlace (ver §3) |
-| `POST /api/connect` | `{"transport": "serial", "port": "/dev/cu...", "baud": 921600}`, `{"transport": "wifi", "host": "192.168.4.1"}` (IP, nombre `.local` o `ws://…`) o `{"transport": "demo"}` | Estado; `502` con `detail` si falla. Por WiFi, si la conexión se pierde después, el gateway reintenta cada 2 s (`retrying: true`) hasta recuperarla o hasta `disconnect` |
+| `POST /api/connect` | `{"transport": "serial", "port": "/dev/cu...", "baud": 921600}`, `{"transport": "wifi", "host": "192.168.4.1"}` (IP, nombre `.local` o `ws://…`) `{"transport": "mqtt", "host": "<broker>", "mqtt_port": 1883, "robot": "balancin-xxxx"}` o `{"transport": "demo"}` | Estado; `502` con `detail` si falla. Por WiFi, si la conexión se pierde después, el gateway reintenta cada 2 s (`retrying: true`) hasta recuperarla o hasta `disconnect` |
 | `POST /api/disconnect` | — | Estado. Deja la telemetría del robot en texto a 10 Hz, como el monitor serie espera |
 | `GET /api/sessions` | `limit` (200), `q` (busca en notas, destino, firmware o número), `transport` | Sesiones, la más reciente primero, con `frames`, `t_first`, `t_last` (ms del robot) y `n_events` |
 | `GET /api/sessions/{id}` | — | Una sesión, con `params` al conectar |
@@ -26,6 +26,7 @@ Base: `http://<host>:8000`. Sin autenticación todavía (ver PLAN §8): por defe
 | `GET /api/sessions/{id}/columns` | `max_points` (20000) | Telemetría en columnas para gráficas: `{total, step, columns}`; si hay más tramas que `max_points` se toma 1 de cada `step` |
 | `GET /api/sessions/{id}/telemetry.csv` | — | Descarga CSV de todas las tramas, con `t_s` desde el inicio de la sesión |
 | `GET /api/sessions/{id}/events` | — | Filas de `events` con `payload` ya decodificado |
+| `GET /api/mqtt/robots` | `broker`, `port` | Robots anunciados en el broker: `[{"robot", "status"}]` (estado retenido) |
 | `GET /api/info` | — | Dirección y puerto; `lan_urls` para abrir la HMI desde otro equipo |
 | `GET /api/param-sets` | — | Juegos de parámetros, por nombre |
 | `GET /api/param-sets/{id}` | — | Un juego |
@@ -63,7 +64,7 @@ Un mensaje JSON por trama de texto.
 ```
 
 Comandos permitidos: `hello`, `get`, `schema`, `set`, `defaults`, `save`, `calib`, `deadband`,
-`estop`, `arm`, `wifi`. `tel` no: la telemetría la configura el gateway. El `id` lo elige el cliente y vuelve
+`estop`, `arm`, `wifi`, `mqtt`. `tel` no: la telemetría la configura el gateway. El `id` lo elige el cliente y vuelve
 en su `ack`; el gateway usa ids propios con el robot.
 
 - Los comandos se envían al robot de a uno, en orden de llegada, excepto `estop`, que no espera
