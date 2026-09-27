@@ -18,9 +18,13 @@ Base: `http://<host>:8000`. Sin autenticación todavía (ver PLAN §8): por defe
 | `GET /api/status` | — | Estado del enlace (ver §3) |
 | `POST /api/connect` | `{"transport": "serial", "port": "/dev/cu...", "baud": 921600}` o `{"transport": "demo"}` | Estado; `502` con `detail` si falla |
 | `POST /api/disconnect` | — | Estado. Deja la telemetría del robot en texto a 10 Hz, como el monitor serie espera |
-| `GET /api/sessions?limit=50` | — | Sesiones, la más reciente primero, con `frames` (tramas guardadas) |
+| `GET /api/sessions` | `limit` (200), `q` (busca en notas, destino, firmware o número), `transport` | Sesiones, la más reciente primero, con `frames`, `t_first`, `t_last` (ms del robot) y `n_events` |
 | `GET /api/sessions/{id}` | — | Una sesión, con `params` al conectar |
-| `GET /api/sessions/{id}/telemetry` | `t_from`, `t_to` (ms del robot), `limit` | Filas de `telemetry` |
+| `PATCH /api/sessions/{id}` | `{"notes": "..."}` | Guarda las notas de la sesión |
+| `DELETE /api/sessions/{id}` | — | Borra la sesión con su telemetría y eventos. `409` si es la sesión en curso |
+| `GET /api/sessions/{id}/telemetry` | `t_from`, `t_to` (ms del robot), `limit`, `offset` | Filas de `telemetry` (la tabla del historial pagina con `offset`) |
+| `GET /api/sessions/{id}/columns` | `max_points` (20000) | Telemetría en columnas para gráficas: `{total, step, columns}`; si hay más tramas que `max_points` se toma 1 de cada `step` |
+| `GET /api/sessions/{id}/telemetry.csv` | — | Descarga CSV de todas las tramas, con `t_s` desde el inicio de la sesión |
 | `GET /api/sessions/{id}/events` | — | Filas de `events` con `payload` ya decodificado |
 | `GET /api/info` | — | Dirección y puerto; `lan_urls` para abrir la HMI desde otro equipo |
 | `GET /api/param-sets` | — | Juegos de parámetros, por nombre |
@@ -49,6 +53,7 @@ Un mensaje JSON por trama de texto.
 | `params` | Tras un `set`/`defaults` aceptado o la tecla `p` | `params` completos |
 | `event` | Cada evento guardado | `event`: `{kind, t_ms, host_ts, payload}` (§4) |
 | `param_sets_changed` | Al guardar o borrar un juego | — (la HMI vuelve a pedir la lista) |
+| `sessions_changed` | Al editar notas o borrar una sesión | — |
 | `ack` | Respuesta a un comando de este cliente | `id` del cliente, `ok`, `err` y los campos extra del robot |
 
 ### HMI → gateway
@@ -187,4 +192,6 @@ Con el gateway **detenido** (la clave foránea borra también su telemetría y e
 sqlite3 data/balancin.db "PRAGMA foreign_keys=ON; DELETE FROM sessions WHERE id IN (1,2,3); VACUUM;"
 ```
 
-En F3 la HMI tendrá la tabla de historial con filtros, exportación y borrado.
+Desde la HMI: pestaña **Historial** → elegir la sesión → **Borrar** (no deja borrar la sesión en
+curso). Borrar no reduce el tamaño del archivo; para recuperar el espacio, con el gateway detenido:
+`sqlite3 data/balancin.db "VACUUM;"`.

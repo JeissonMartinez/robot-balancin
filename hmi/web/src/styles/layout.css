@@ -1,32 +1,147 @@
-/* Rejilla principal: a la izquierda lo que se mira, a la derecha lo que se toca
-   (mismo criterio que el simulador).
-   - Escritorio y tablet horizontal (> 1080 px): dos columnas.
-   - Tablet vertical (iPad mini 744 px) hasta 1080: seguridad y conexión lado a lado
-     arriba, luego cifras, trazas y registro a todo el ancho.
-   - Celular (≤ 700 px): una columna en ese mismo orden. */
+/* Disposición. A la izquierda lo que se mira (cifras, escena, trazas, historial); a la
+   derecha lo que se toca (mismo criterio que el simulador).
+
+   - PC y tablet horizontal (> 1080 px): la página ocupa el alto de la pantalla y no se
+     desplaza; cada columna tiene su propio desplazamiento. Seguridad queda fija arriba
+     del panel de control, así la parada está siempre a la vista.
+   - Tablet vertical (701–1080 px, iPad mini 744): monitoreo arriba y control abajo,
+     cada uno con su desplazamiento.
+   - Celular (≤ 700 px): una columna con desplazamiento normal de la página. */
 main{
-  padding:clamp(10px,2vw,20px);
-  display:grid; gap:16px;
-  grid-template-columns:minmax(0,1fr) 360px;
+  padding:clamp(10px,1.4vw,16px);
+  display:grid; gap:14px;
+  grid-template-columns:minmax(0,1fr) 380px;
   align-items:start;
-  max-width:1680px; margin:0 auto;
+  max-width:1800px; width:100%; margin:0 auto;
 }
-.col{display:flex; flex-direction:column; gap:16px; min-width:0}
-@media (max-width:1080px){
-  main{
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;
-    grid-template-areas:"seg con" "tiles tiles" "trazas trazas" "par par" "juegos cmd" "log log";
-  }
-  .col{display:contents}
-  #cardSeguridad{grid-area:seg} #cardConexion{grid-area:con} #tiles{grid-area:tiles}
-  #cardTrazas{grid-area:trazas} #cardRegistro{grid-area:log}
-  #cardParametros{grid-area:par} #cardJuegos{grid-area:juegos} #cardComandos{grid-area:cmd}
-  /* Tablet: los grupos de parámetros en dos columnas */
+.col{display:flex; flex-direction:column; gap:14px; min-width:0}
+.side-scroll{display:flex; flex-direction:column; gap:14px; min-width:0}
+
+@media (min-width:701px){
+  body{height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden}
+  header.top{flex:none}
+  main{flex:1; min-height:0; align-items:stretch; grid-template-rows:minmax(0,1fr)}
+  .col.monitor{min-height:0; overflow-y:auto; overscroll-behavior:contain}
+  .col.side{min-height:0}
+  #cardSeguridad{flex:none}
+  .side-scroll{flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:0 2px 4px 0}
+  /* Alto definido (base 0): el contenido se ajusta a la tarjeta y no al revés */
+  #cardVista{flex:1 1 0; min-height:500px; display:flex; flex-direction:column}
+  .vista-body{flex:1; min-height:0; display:flex}
+  .panel-vivo, .panel-hist{flex:1; min-height:0; min-width:0}
+  .panel-vivo{display:grid; grid-template-columns:minmax(260px,34%) minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:10px; padding:10px}
+  .panel-vivo .plots{min-height:0; overflow-y:auto; padding:0}
+  .tiles{grid-template-columns:repeat(6,minmax(0,1fr))}
+}
+
+/* Pantallas medianas (iPad horizontal, portátiles pequeños) */
+@media (min-width:1081px) and (max-width:1300px){
+  main{grid-template-columns:minmax(0,1fr) 330px; gap:10px}
+  .col, .side-scroll{gap:10px}
+  .tiles{gap:8px}
+  .tile{padding:8px 9px}
+}
+/* Pantallas bajas: el encabezado cede alto a la vista */
+@media (min-width:701px) and (max-height:820px){
+  header.top{padding-top:8px; padding-bottom:8px}
+  header.top .sub, .autoria .det{display:none}
+  #logoUni{height:40px} #logoMec{height:37px}
+  #cardVista{min-height:380px}
+}
+
+@media (min-width:701px) and (max-width:1080px){
+  main{grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1.45fr) minmax(0,1fr); gap:10px}
+  #cardVista{min-height:360px}
+  .panel-vivo{grid-template-columns:minmax(220px,36%) minmax(0,1fr)}
+  /* Control: seguridad a lo ancho; debajo, tarjetas en dos columnas */
+  .col.side{gap:10px}
+  .side-scroll{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; align-items:start}
+  #cardParametros, #cardRegistro, .side-scroll .pie{grid-column:1/-1}
   #parGrupos{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  #cardSeguridad .card-body{flex-direction:row; align-items:center}
+  #cardSeguridad .safety{flex:1}
+  #cardSeguridad .safety-note{flex:1}
+  .tile{padding:8px 10px}
+  .tile .val{font-size:18px}
+}
+
+@media (max-width:700px){
+  main{grid-template-columns:minmax(0,1fr); gap:12px}
+  .col, .side-scroll{display:contents}
+  #cardSeguridad{order:1} #cardConexion{order:2} .tiles{order:3} #cardVista{order:4}
+  #cardParametros{order:5} #cardJuegos{order:6} #cardComandos{order:7} #cardRegistro{order:8} .pie{order:9}
+  main{display:flex; flex-direction:column}
+  .panel-vivo{display:flex; flex-direction:column; gap:8px; padding:8px 4px}
+  .panel-vivo .escena-host{height:280px}
+  .vivo-ctl .hint{display:none}
+  .vivo-ctl .seg button{padding:5px 8px}
+}
+
+/* ===================== vista: pestañas, escena ===================== */
+.vista > .card-head{gap:8px 12px}
+.vivo-ctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1}
+.vivo-ctl .hint{margin-left:auto}
+.escena-host{min-height:0; min-width:0}
+.scene{display:flex; flex-direction:column; border:1px solid var(--line-soft); border-radius:8px; overflow:hidden; background:var(--scene-sky)}
+.scene-bar{display:flex; align-items:center; gap:6px; padding:6px; border-bottom:1px solid var(--line-soft); background:var(--surface)}
+.scene-bar .seg button{min-height:26px; padding:3px 9px}
+.scene-canvas{flex:1; min-height:200px; position:relative}
+.scene-canvas canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+.scene-canvas canvas.orbit{cursor:grab; touch-action:none}
+.scene-canvas canvas.orbit:active{cursor:grabbing}
+.scene-cap{font-size:11px; color:var(--ink-3); padding:4px 8px}
+
+/* ===================== historial ===================== */
+.panel-hist{display:flex}
+.hist{display:grid; grid-template-columns:260px minmax(0,1fr); grid-template-rows:minmax(0,1fr); flex:1; min-height:0; min-width:0}
+.hist-list{display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--line-soft)}
+.hist-filtros{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; padding:8px; border-bottom:1px solid var(--line-soft)}
+.hist-items{flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column}
+.hist-item{
+  display:flex; flex-direction:column; gap:1px; text-align:left; border:0; border-bottom:1px solid var(--line-soft);
+  background:none; padding:8px 10px; cursor:pointer; font-size:12.5px;
+}
+.hist-item:hover{background:var(--surface-2)}
+.hist-item[aria-pressed="true"]{background:color-mix(in srgb,var(--azul) 10%,transparent); box-shadow:inset 3px 0 0 var(--azul)}
+.hist-item .l2{font-size:11px}
+.hist-item .l3{font-size:11.5px; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.hist-item .pill{font-size:10px; padding:0 6px; margin-left:4px}
+.hist-vacio, .hist-vacio-lista{padding:14px; font-size:12.5px}
+.hist-det{display:flex; flex-direction:column; min-height:0; min-width:0}
+.hist-content{display:flex; flex-direction:column; flex:1; min-height:0; gap:8px; padding:8px 10px}
+.hist-head{display:flex; flex-direction:column; gap:6px}
+.hist-title{font-size:13px}
+.hist-head .row input{flex:1; min-width:160px}
+.hist-head a.btn{text-decoration:none; display:inline-flex; align-items:center}
+.hist-tabs{align-self:flex-start}
+.hist-pane{flex:1; min-height:0; display:flex; flex-direction:column; gap:6px}
+.hist-graf{flex:1; min-height:0; display:grid; grid-template-columns:minmax(220px,32%) minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:10px}
+.hist-graf .plots{min-height:0; overflow-y:auto; padding:0}
+.player{display:flex; align-items:center; gap:8px}
+.player input[type=range]{flex:1; accent-color:var(--azul)}
+.player select{min-height:28px; padding:2px 6px}
+.hist-nota{font-size:11px}
+.pager{gap:6px}
+.tabla-wrap{flex:1; min-height:0; overflow:auto; border:1px solid var(--line-soft); border-radius:6px}
+table.tel{border-collapse:collapse; font-size:11.5px; width:100%}
+table.tel th{position:sticky; top:0; background:var(--surface-2); color:var(--ink-3); font-weight:400; text-align:right; padding:4px 7px; white-space:nowrap; border-bottom:1px solid var(--line)}
+table.tel td{text-align:right; padding:3px 7px; border-bottom:1px solid var(--line-soft); white-space:nowrap}
+table.tel tbody tr:hover{background:var(--surface-2)}
+.hist-pane .log{max-height:none; flex:1; min-height:0; border:1px solid var(--line-soft); border-radius:6px}
+.log .ln.click{cursor:pointer}
+.log .ln.click:hover{background:var(--surface-2)}
+
+@media (min-width:701px) and (max-width:1300px){
+  .hist{grid-template-columns:210px minmax(0,1fr)}
+  .hist-graf{grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(200px,40%) minmax(0,1fr)}
 }
 @media (max-width:700px){
-  main{grid-template-columns:minmax(0,1fr); grid-template-areas:"seg" "con" "tiles" "trazas" "par" "juegos" "cmd" "log"}
-  #parGrupos{grid-template-columns:minmax(0,1fr)}
+  .hist{grid-template-columns:minmax(0,1fr)}
+  .hist-list{border-right:0; border-bottom:1px solid var(--line-soft)}
+  .hist-items{max-height:240px}
+  .hist-graf{display:flex; flex-direction:column}
+  .hist-graf .escena-host{height:260px}
+  .tabla-wrap{max-height:60vh}
 }
 
 /* ===================== parada de emergencia ===================== */
@@ -52,7 +167,7 @@ main{
 }
 
 /* ===================== trazas ===================== */
-.plots{display:flex; flex-direction:column; gap:4px; padding:6px 4px 8px}
+.plots{display:flex; flex-direction:column; gap:2px; padding:6px 4px 8px}
 .plot{position:relative; min-width:0}
 .plot-head{display:flex; align-items:center; flex-wrap:wrap; gap:2px 12px; padding:2px 6px 0 9px}
 .plot-title{
@@ -136,12 +251,20 @@ details.grupo > summary .n{margin-left:auto; text-transform:none; letter-spacing
 .ctl .nota{grid-column:1/-1; font-size:11px; color:var(--ink-3); line-height:1.35}
 .ctl .nota .err-msg{color:var(--rojo)}
 .ctl.pendiente{border-left-color:var(--dorado)}
+.ctl.aplicado{animation:aplicado 1.4s ease-out}
+@keyframes aplicado{
+  0%{border-left-color:var(--verde); background:color-mix(in srgb,var(--verde) 14%,transparent)}
+  100%{border-left-color:transparent; background:transparent}
+}
+.par-estado{font-size:11.5px; color:var(--verde); max-width:22ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.par-estado.bad{color:var(--rojo)}
+#parHead{display:inline-flex; align-items:center; gap:12px; min-width:0}
 .ctl.error{border-left-color:var(--rojo)}
 .ctl.sin-uso .name, .ctl.sin-uso input[type=range]{opacity:.55}
 
 .params-bar{
   display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 10px; border-radius:8px;
-  background:color-mix(in srgb,var(--dorado) 14%,transparent); position:sticky; top:6px; z-index:2;
+  background:color-mix(in srgb,var(--dorado) 14%,transparent); position:sticky; top:0; z-index:2;
 }
 .params-msg{font-size:12px; color:var(--ink-2); margin-right:auto}
 .params-msg.err{color:var(--rojo)}
@@ -179,4 +302,4 @@ dialog.dlg h3{font-size:17px; margin-bottom:8px}
 table.diff{width:100%; border-collapse:collapse; font-size:12px}
 table.diff td{padding:4px 6px; border-bottom:1px solid var(--line-soft)}
 
-footer.pie{max-width:1680px; margin:0 auto; padding:4px clamp(10px,2vw,20px) 22px; font-size:11px; color:var(--ink-3)}
+footer.pie{padding:2px 4px 8px; font-size:11px; color:var(--ink-3)}

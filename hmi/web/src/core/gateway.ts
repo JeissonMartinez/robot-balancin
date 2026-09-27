@@ -3,7 +3,9 @@
  * respuesta (Promise). Toda la HMI se entera de lo que pasa por los eventos de
  * esta clase; nadie más abre sockets.
  */
-import type { Ack, Frame, GwEvent, ParamDesc, Params, ParamSet, ServerMsg, Status } from './protocol';
+import type {
+  Ack, Frame, GwEvent, ParamDesc, Params, ParamSet, ServerMsg, Session, SessionColumns, Status, TelemetryRow,
+} from './protocol';
 
 interface EventMap {
   link: boolean; // WebSocket con el gateway abierto / cerrado
@@ -13,6 +15,7 @@ interface EventMap {
   frames: Frame[];
   event: GwEvent;
   paramSetsChanged: void;
+  sessionsChanged: void;
 }
 type Listener<K extends keyof EventMap> = (v: EventMap[K]) => void;
 
@@ -92,6 +95,9 @@ export class Gateway {
       case 'param_sets_changed':
         this.emit('paramSetsChanged', undefined);
         break;
+      case 'sessions_changed':
+        this.emit('sessionsChanged', undefined);
+        break;
       case 'ack': {
         const p = this.pending.get(msg.id);
         if (p) {
@@ -156,4 +162,19 @@ export const api = {
     request<ParamSet>('POST', '/api/param-sets', body),
   deleteParamSet: (id: number) => request<{ ok: boolean }>('DELETE', `/api/param-sets/${id}`),
   applyParamSet: (id: number) => request<Ack & { ignored: string[] }>('POST', `/api/param-sets/${id}/apply`),
+  sessions: (q?: string, transport?: string) => {
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (transport) p.set('transport', transport);
+    return request<Session[]>('GET', `/api/sessions?${p}`);
+  },
+  session: (id: number) => request<Session>('GET', `/api/sessions/${id}`),
+  patchSession: (id: number, notes: string) => request<Session>('PATCH', `/api/sessions/${id}`, { notes }),
+  deleteSession: (id: number) => request<{ ok: boolean }>('DELETE', `/api/sessions/${id}`),
+  sessionColumns: (id: number, maxPoints = 20000) =>
+    request<SessionColumns>('GET', `/api/sessions/${id}/columns?max_points=${maxPoints}`),
+  telemetryPage: (id: number, offset: number, limit: number) =>
+    request<TelemetryRow[]>('GET', `/api/sessions/${id}/telemetry?offset=${offset}&limit=${limit}`),
+  sessionEvents: (id: number) => request<(GwEvent & { id: number })[]>('GET', `/api/sessions/${id}/events`),
+  csvUrl: (id: number) => `/api/sessions/${id}/telemetry.csv`,
 };

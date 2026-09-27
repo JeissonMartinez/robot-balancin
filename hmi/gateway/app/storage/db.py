@@ -110,19 +110,45 @@ class Database:
                               (now_iso(), session_id))
             self._con.commit()
 
-    def list_sessions(self, limit: int = 50) -> list[dict]:
+    _SESSION_SQL = """
+        SELECT s.*,
+               (SELECT COUNT(*)    FROM telemetry t WHERE t.session_id = s.id) AS frames,
+               (SELECT MIN(t_ms)   FROM telemetry t WHERE t.session_id = s.id) AS t_first,
+               (SELECT MAX(t_ms)   FROM telemetry t WHERE t.session_id = s.id) AS t_last,
+               (SELECT COUNT(*)    FROM events e    WHERE e.session_id = s.id) AS n_events
+        FROM sessions s"""
+
+    def list_sessions(self, limit: int = 200, q: str | None = None, transport: str | None = None) -> list[dict]:
+        """Sesiones, la más reciente primero. `q` busca en notas, destino y firmware."""
+        where, args = [], []
+        if q:
+            where.append("(s.notes LIKE ? OR s.target LIKE ? OR s.fw LIKE ? OR CAST(s.id AS TEXT) = ?)")
+            args += [f"%{q}%", f"%{q}%", f"%{q}%", q]
+        if transport:
+            where.append("s.transport = ?")
+            args.append(transport)
+        sql = self._SESSION_SQL + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY s.id DESC LIMIT ?"
         with self._lock:
-            rows = self._con.execute(
-                """SELECT s.*, (SELECT COUNT(*) FROM telemetry t WHERE t.session_id = s.id) AS frames
-                   FROM sessions s ORDER BY s.id DESC LIMIT ?""", (limit,)).fetchall()
+            rows = self._con.execute(sql, (*args, limit)).fetchall()
         return [_session_dict(r) for r in rows]
 
     def get_session(self, session_id: int) -> dict | None:
         with self._lock:
-            r = self._con.execute(
-                """SELECT s.*, (SELECT COUNT(*) FROM telemetry t WHERE t.session_id = s.id) AS frames
-                   FROM sessions s WHERE s.id=?""", (session_id,)).fetchone()
+            r = self._con.execute(self._SESSION_SQL + " WHERE s.id=?", (session_id,)).fetchone()
         return _session_dict(r) if r else None
+
+    def update_session_notes(self, session_id: int, notes: str | None) -> bool:
+        with self._lock:
+            n = self._con.execute("UPDATE sessions SET notes=? WHERE id=?", (notes, session_id)).rowcount
+            self._con.commit()
+        return n > 0
+
+    def delete_session(self, session_id: int) -> bool:
+        """Borra la sesión con su telemetría y sus eventos (ON DELETE CASCADE)."""
+        with self._lock:
+            n = self._con.execute("DELETE FROM sessions WHERE id=?", (session_id,)).rowcount
+            self._con.commit()
+        return n > 0
 
     # ---------------------------------------------------------------- telemetría
     def insert_telemetry(self, session_id: int, frames: list[tuple[float, dict]]):
@@ -136,8 +162,35 @@ class Database:
             self._con.executemany(f"INSERT INTO telemetry(session_id, host_ts, {cols}) VALUES ({marks})", rows)
             self._con.commit()
 
+    def get_telemetry_columns(self, session_id: int, max_points: int = 20_000) -> dict:
+        """Telemetría en columnas (para gráficas). Si hay más de `max_points` tramas se toma
+        1 de cada `step`, en orden."""
+        cols = [c for _, c in TEL_FIELDS]
+        with self._lock:
+            total = self._con.execute("SELECT COUNT(*) FROM telemetry WHERE session_id=?", (session_id,)).fetchone()[0]
+            step = max(1, -(-total // max(1, max_points)))
+            rows = self._con.execute(
+                f"""SELECT {", ".join(cols)} FROM (
+                       SELECT *, ROW_NUMBER() OVER (ORDER BY rowid) AS rn FROM telemetry WHERE session_id=?)
+                    WHERE (rn - 1) % ? = 0 ORDER BY rn""", (session_id, step)).fetchall()
+        data = {c: [r[i] for r in rows] for i, c in enumerate(cols)}
+        return {"total": total, "step": step, "columns": data}
+
+    def iter_telemetry(self, session_id: int, page: int = 5000):
+        """Todas las filas de una sesión, por páginas (para exportar sin cargar todo)."""
+        last = -1
+        while True:
+            with self._lock:
+                rows = self._con.execute(
+                    "SELECT rowid AS rid, * FROM telemetry WHERE session_id=? AND rowid > ? ORDER BY rowid LIMIT ?",
+                    (session_id, last, page)).fetchall()
+            if not rows:
+                return
+            last = rows[-1]["rid"]
+            yield from rows
+
     def get_telemetry(self, session_id: int, t_from: int | None = None, t_to: int | None = None,
-                      limit: int = 100_000) -> list[dict]:
+                      limit: int = 100_000, offset: int = 0) -> list[dict]:
         q = "SELECT * FROM telemetry WHERE session_id=?"
         args: list = [session_id]
         if t_from is not None:
@@ -146,8 +199,8 @@ class Database:
         if t_to is not None:
             q += " AND t_ms <= ?"
             args.append(t_to)
-        q += " ORDER BY rowid LIMIT ?"
-        args.append(limit)
+        q += " ORDER BY rowid LIMIT ? OFFSET ?"
+        args += [limit, offset]
         with self._lock:
             return [dict(r) for r in self._con.execute(q, args).fetchall()]
 

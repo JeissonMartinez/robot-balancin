@@ -87,7 +87,9 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | `core/` | `protocol.ts` (tipos de los mensajes), `gateway.ts` (WebSocket con reconexión, comandos, REST) |
 | `core/paramspec.ts` | Presentación de los parámetros: nombre legible, grupo, a qué estructura aplican, paso del slider, validación local |
 | `ui/` | Tema, conexión (se pliega al conectar en tablet y celular), cifras, registro, `params.ts` (panel de parámetros), `paramsets.ts` (juegos), `commands.ts` (calibrar, zona muerta), `dialog.ts` (confirmaciones) |
-| `plots/` | Trazas con uPlot y leyenda propia (muestra de línea, valor, clic para ocultar) |
+| `plots/` | Trazas con uPlot y leyenda propia; modo en vivo (ventana de 5–60 s) y modo reproducción (sesión completa, cabezal, cursor sincronizado con la escena) |
+| `scene/` | Escena del robot portada del Simulador_Balancin: `scene.ts` (2D y 3D en canvas), `pose.ts` (telemetría → pose; integra la posición desde las RPM), `geometry.ts` (medidas del robot para dibujarlo) |
+| `ui/history.ts` | Historial: lista de sesiones, gráficas reproducibles, tabla paginada, eventos, CSV, notas y borrado |
 | `styles/` | `tokens.css` (colores del Simulador_Balancin + paleta de series), `base.css`, `layout.css` |
 
 ### Estructura de `gateway/app`
@@ -102,15 +104,37 @@ cd hmi/gateway && .venv/bin/python -m pytest
 
 ### Tamaños de pantalla
 
-Probados: escritorio (1440 px), iPad mini horizontal (1133 × 744) y vertical (744 × 1133), celular (375 px).
+Probados: escritorio (1440 × 860), iPad mini horizontal (1133 × 690) y vertical (744 × 1060), celular (375 px).
 
 | Ancho | Disposición |
 |---|---|
-| > 1080 px | Dos columnas: lo que se mira a la izquierda, lo que se toca a la derecha |
-| 701–1080 px | Seguridad y conexión lado a lado arriba; cifras, trazas y registro a todo el ancho |
-| ≤ 700 px | Una columna en el mismo orden |
+| > 1080 px | La página ocupa el alto de la pantalla y no se desplaza. Izquierda (monitoreo): cifras y la vista con pestañas **En vivo** (escena + trazas lado a lado) e **Historial**. Derecha (control): **Seguridad fija arriba** y debajo conexión, parámetros, juegos, comandos y registro con su propio desplazamiento |
+| 701–1080 px | Monitoreo arriba (~60 % del alto) y control abajo, cada uno con su desplazamiento; seguridad a todo el ancho y las demás tarjetas en dos columnas |
+| ≤ 700 px | Una columna con desplazamiento normal: seguridad, conexión, cifras, vista, parámetros, juegos, comandos, registro |
 
+En pantallas bajas (≤ 820 px de alto) el encabezado oculta la descripción para dar alto a la vista.
 En pantallas táctiles los controles miden al menos ~40 px de alto.
+
+### Escena
+
+- **2D** (la que mide): θ contra la vertical punteada; línea ámbar = θ ref; arco azul sobre la
+  rueda = PWM aplicado (sentido y magnitud); regla del piso cada 5 cm. **Centrar** pone el eje en 0.
+- **3D**: arrastrar gira la cámara, la rueda del ratón acerca, **Reencuadrar** vuelve al inicio.
+- La posición no viene en la telemetría: se integra la media de las RPM de las dos ruedas (si el
+  encoder izquierdo falla, la posición deriva).
+- Las medidas del robot dibujado salen del simulador; para que se parezca al prototipo, corregirlas
+  en `web/src/scene/geometry.ts`.
+
+### Historial
+
+Pestaña **Historial**: lista de sesiones (buscar por notas, firmware o número; filtrar por
+transporte). En la sesión elegida:
+
+- **Gráficas**: la sesión completa. Pasar el cursor por las trazas mueve la escena a ese instante;
+  ▶ reproduce a 0.25–4×; arrastrar sobre las trazas acerca, doble clic vuelve.
+- **Tabla**: todas las tramas, 100 por página; **Ir al cabezal** salta al instante de la escena.
+- **Eventos**: comandos y mensajes del robot; un clic lleva a ese instante.
+- **Notas** (Enter guarda), **CSV** y **Borrar**.
 
 ### Colores de las trazas
 

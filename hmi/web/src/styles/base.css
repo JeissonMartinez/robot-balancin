@@ -80,7 +80,9 @@ header.top .sub{color:var(--ink-2); font-size:12.5px; max-width:66ch; margin-top
   padding:10px 13px 11px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:2px; min-width:0;
 }
 .tile .lbl{font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3)}
-.tile .val{font-size:24px; letter-spacing:-.02em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tile .val{font-size:clamp(17px,1.55vw,24px); letter-spacing:-.02em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tile .val.dual{font-size:clamp(13px,1.2vw,20px)}
+.tile .tile-pill{font-size:clamp(11px,1vw,14px)}
 .tile .val small{font-size:12px; color:var(--ink-2); letter-spacing:0}
 .tile .foot{font-size:11px; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 @media (max-width:520px){ .tile .val{font-size:20px} }
@@ -99,7 +101,7 @@ header.top .sub{color:var(--ink-2); font-size:12.5px; max-width:66ch; margin-top
 .btn.small{padding:4px 8px; font-size:11.5px; min-height:26px}
 .btn[aria-pressed="true"]{background:var(--azul); border-color:var(--azul); color:#fff}
 .seg{display:inline-flex; border:1px solid var(--line); border-radius:7px; overflow:hidden}
-.seg button{border:0; background:var(--surface-2); padding:5px 10px; font-size:12px; cursor:pointer; min-height:30px}
+.seg button{border:0; background:var(--surface-2); padding:5px 10px; font-size:12px; cursor:pointer; min-height:30px; white-space:nowrap}
 .seg button + button{border-left:1px solid var(--line)}
 .seg button[aria-pressed="true"]{background:var(--azul); color:#fff}
 :root[data-theme="dark"] .seg button[aria-pressed="true"]{color:#0E1218}

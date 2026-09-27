@@ -1,5 +1,8 @@
 /**
- * Trazas en vivo con uPlot.
+ * Trazas con uPlot, en dos modos:
+ * - live: búfer de 60 s alimentado por la telemetría; se dibuja la ventana elegida.
+ * - replay: una sesión guardada completa (historial); zoom siempre activo, cabezal de
+ *   reproducción y cursor que informa el tiempo para sincronizar la escena.
  *
  * - Un gráfico por magnitud (nunca dos ejes y): ángulo, velocidad angular, control, ruedas.
  * - Búfer circular de 60 s (3000 tramas a 50 Hz); se dibuja la ventana elegida.
@@ -74,9 +77,22 @@ interface Marker {
 
 type Col = (number | null)[];
 
+export interface TracesOptions {
+  mode?: 'live' | 'replay';
+  /** Cursor sobre los gráficos: tiempo [s] bajo el cursor, o null al salir. */
+  onCursor?: (t: number | null) => void;
+}
+
+/** En pantallas medianas y grandes los gráficos se reparten el alto disponible. */
+const fitsHeight = () => matchMedia('(min-width: 701px)').matches;
+
 export class Traces {
   windowS = 10;
   private paused = false;
+  private readonly replay: boolean;
+  private onCursor?: (t: number | null) => void;
+  private zoom: { min: number; max: number } | null = null;
+  private playhead: number | null = null;
   private t: number[] = [];
   private cols = new Map<FrameKey, Col>();
   private markers: Marker[] = [];
@@ -84,7 +100,10 @@ export class Traces {
   private visibility = new Map<string, boolean>();
   private frameReq = 0;
 
-  constructor(private root: HTMLElement) {
+  constructor(private root: HTMLElement, opts: TracesOptions = {}) {
+    this.replay = opts.mode === 'replay';
+    this.onCursor = opts.onCursor;
+    this.paused = this.replay;
     for (const p of PLOTS) for (const s of p.series) {
       this.cols.set(s.key, []);
       this.visibility.set(s.key, s.show !== false);
@@ -117,7 +136,25 @@ export class Traces {
     this.t = [];
     for (const col of this.cols.values()) col.length = 0;
     this.markers = [];
+    this.zoom = null;
+    this.playhead = null;
     this.schedule(true);
+  }
+
+  /** Modo replay: carga una sesión completa. `t` en s; columnas por clave de trama. */
+  load(t: number[], cols: Partial<Record<FrameKey, Col>>) {
+    this.t = t;
+    for (const key of this.cols.keys()) this.cols.set(key, cols[key] ?? t.map(() => null));
+    this.markers = [];
+    this.zoom = null;
+    this.playhead = null;
+    this.schedule(true);
+  }
+
+  /** Modo replay: línea vertical en el instante que muestra la escena. */
+  setPlayhead(t: number | null) {
+    this.playhead = t;
+    for (const { u } of this.charts) u.redraw(false);
   }
 
   addMarker(tMs: number, label: string) {
@@ -146,8 +183,13 @@ export class Traces {
 
   private render() {
     const n = this.t.length;
-    const tMax = n ? this.t[n - 1] : this.windowS;
-    const tMin = tMax - this.windowS;
+    let tMax = n ? this.t[n - 1] : this.windowS;
+    let tMin = tMax - this.windowS;
+    if (this.replay) {
+      tMin = this.zoom?.min ?? (n ? this.t[0] : 0);
+      tMax = this.zoom?.max ?? (n ? this.t[n - 1] : 1);
+      if (tMax <= tMin) tMax = tMin + 1;
+    }
     // búsqueda binaria del primer punto dentro de la ventana
     let lo = 0;
     let hi = n;
@@ -181,6 +223,11 @@ export class Traces {
 
   private size() {
     const w = Math.max(240, this.root.clientWidth - 8);
+    if (fitsHeight() && this.root.clientHeight > 0) {
+      // Reparte el alto del contenedor entre los cuatro gráficos (cabecera ~30 px cada uno)
+      const h = Math.floor((this.root.clientHeight - 12) / PLOTS.length) - 30;
+      return { width: w, height: Math.max(80, Math.min(240, h)) };
+    }
     return { width: w, height: w < 600 ? 120 : 150 };
   }
 
@@ -212,11 +259,13 @@ export class Traces {
       }
       const min = from.posToVal(from.select.left, 'x');
       const max = from.posToVal(from.select.left + from.select.width, 'x');
+      if (this.replay) this.zoom = { min, max };
       for (const { u } of this.charts) {
         u.setScale('x', { min, max });
         u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
       }
     };
+    const playColor = cssVar('--ink-2');
 
     PLOTS.forEach((def, idx) => {
       const host = document.createElement('div');
@@ -249,7 +298,7 @@ export class Traces {
       const opts: uPlot.Options = {
         ...this.size(),
         cursor: {
-          sync: { key: 'trazas' },
+          sync: { key: this.replay ? 'historial' : 'trazas' },
           drag: { x: true, y: false, setScale: false },
         },
         scales: { x: { time: false, auto: false } },
@@ -278,7 +327,15 @@ export class Traces {
         ],
         hooks: {
           setSelect: [zoomAll],
-          setCursor: [(u) => this.updateLegend({ def, u, values })],
+          setCursor: [
+            (u) => {
+              this.updateLegend({ def, u, values });
+              if (this.onCursor && idx === 0) {
+                const i = u.cursor.idx;
+                this.onCursor(i == null ? null : ((u.data[0][i] as number) ?? null));
+              }
+            },
+          ],
           draw: [
             (u) => {
               const { ctx, bbox } = u;
@@ -290,6 +347,8 @@ export class Traces {
               ctx.lineWidth = devicePixelRatio;
               ctx.setLineDash([3 * devicePixelRatio, 3 * devicePixelRatio]);
               ctx.font = `${10 * devicePixelRatio}px "JetBrains Mono", Menlo, monospace`;
+              // Etiquetas en hasta 3 renglones para que no se encimen; si no caben, sólo la línea
+              const rowEnd = [-Infinity, -Infinity, -Infinity];
               for (const m of this.markers) {
                 if (m.t < xMin || m.t > xMax) continue;
                 const x = Math.round(u.valToPos(m.t, 'x', true));
@@ -297,7 +356,22 @@ export class Traces {
                 ctx.moveTo(x, bbox.top);
                 ctx.lineTo(x, bbox.top + bbox.height);
                 ctx.stroke();
-                if (idx === 0) ctx.fillText(m.label, x + 4 * devicePixelRatio, bbox.top + 11 * devicePixelRatio);
+                if (idx !== 0) continue;
+                const w = ctx.measureText(m.label).width;
+                const row = rowEnd.findIndex((end) => x > end + 6 * devicePixelRatio);
+                if (row < 0) continue;
+                ctx.fillText(m.label, x + 4 * devicePixelRatio, bbox.top + (11 + row * 12) * devicePixelRatio);
+                rowEnd[row] = x + 4 * devicePixelRatio + w;
+              }
+              if (this.playhead !== null && this.playhead >= xMin && this.playhead <= xMax) {
+                const x = Math.round(u.valToPos(this.playhead, 'x', true));
+                ctx.setLineDash([]);
+                ctx.strokeStyle = playColor;
+                ctx.lineWidth = 1.5 * devicePixelRatio;
+                ctx.beginPath();
+                ctx.moveTo(x, bbox.top);
+                ctx.lineTo(x, bbox.top + bbox.height);
+                ctx.stroke();
               }
               ctx.restore();
             },
@@ -305,7 +379,12 @@ export class Traces {
         },
       };
       const u = new uPlot(opts, [[], ...def.series.map(() => [])] as uPlot.AlignedData, host);
-      u.over.addEventListener('dblclick', () => setTimeout(() => this.render(), 0));
+      u.over.addEventListener('dblclick', () =>
+        setTimeout(() => {
+          this.zoom = null;
+          this.render();
+        }, 0),
+      );
       toggles.forEach((b, k) =>
         b.addEventListener('click', () => {
           const show = b.getAttribute('aria-pressed') !== 'true';

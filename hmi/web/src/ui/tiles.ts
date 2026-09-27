@@ -16,7 +16,7 @@ export function setupTiles(root: HTMLElement, gw: Gateway) {
     <div class="tile"><span class="lbl">Ángulo θ</span><span class="val mono" id="tAng">—</span><span class="foot mono" id="tRef">ref —</span></div>
     <div class="tile"><span class="lbl">PWM</span><span class="val mono" id="tPwm">—</span><span class="foot mono" id="tPwmM">motor —</span></div>
     <div class="tile"><span class="lbl">Kp</span><span class="val mono" id="tKp">—</span><span class="foot mono" id="tW">ω —</span></div>
-    <div class="tile"><span class="lbl">Ruedas [RPM]</span><span class="val mono" id="tRpm">—</span><span class="foot">izquierda · derecha</span></div>
+    <div class="tile"><span class="lbl">Ruedas [RPM]</span><span class="val mono dual" id="tRpm">—</span><span class="foot">izquierda · derecha</span></div>
     <div class="tile"><span class="lbl">Ciclo</span><span class="val mono" id="tDt">—</span><span class="foot mono" id="tRate">— Hz</span></div>`;
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
@@ -35,7 +35,7 @@ export function setupTiles(root: HTMLElement, gw: Gateway) {
       return;
     }
     const [label, cls] = STATE[last.st] ?? [last.st, ''];
-    $('tEstado').innerHTML = `<span class="pill ${cls}" style="font-size:14px">${label}</span>`;
+    $('tEstado').innerHTML = `<span class="pill ${cls} tile-pill">${label}</span>`;
     $('tEstadoF').textContent = `trama ${last.seq}`;
     $('tAng').innerHTML = `${fmt(last.ang, 2)}<small>°</small>`;
     $('tRef').textContent = `ref ${fmt(last.ref, 2)}°`;

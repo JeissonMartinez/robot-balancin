@@ -12,13 +12,14 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .config import lan_addresses, settings
 from .hub import Hub
 from .robot import RobotLink
-from .storage.db import Database
+from .storage.db import TEL_FIELDS, Database
 from .transports.demo import DemoTransport
 from .transports.serial_port import DEFAULT_BAUD, SerialTransport, available_ports
 
@@ -29,6 +30,10 @@ class ConnectRequest(BaseModel):
     transport: Literal["serial", "demo"]
     port: str | None = None
     baud: int = DEFAULT_BAUD
+
+
+class SessionPatch(BaseModel):
+    notes: str | None = None
 
 
 class ParamSetRequest(BaseModel):
@@ -94,8 +99,8 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
         return link.status()
 
     @app.get("/api/sessions")
-    async def sessions(limit: int = 50):
-        return await asyncio.to_thread(db.list_sessions, limit)
+    async def sessions(limit: int = 200, q: str | None = None, transport: str | None = None):
+        return await asyncio.to_thread(db.list_sessions, limit, q, transport)
 
     @app.get("/api/sessions/{session_id}")
     async def session(session_id: int):
@@ -104,10 +109,51 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
             raise HTTPException(404, "sesión no encontrada")
         return s
 
+    @app.patch("/api/sessions/{session_id}")
+    async def patch_session(session_id: int, body: SessionPatch):
+        notes = (body.notes or "").strip() or None
+        if not await asyncio.to_thread(db.update_session_notes, session_id, notes):
+            raise HTTPException(404, "sesión no encontrada")
+        await hub.broadcast({"type": "sessions_changed"})
+        return await asyncio.to_thread(db.get_session, session_id)
+
+    @app.delete("/api/sessions/{session_id}")
+    async def delete_session(session_id: int):
+        if session_id == link.session_id:
+            raise HTTPException(409, "es la sesión en curso: desconectar primero")
+        if not await asyncio.to_thread(db.delete_session, session_id):
+            raise HTTPException(404, "sesión no encontrada")
+        await hub.broadcast({"type": "sessions_changed"})
+        return {"ok": True}
+
     @app.get("/api/sessions/{session_id}/telemetry")
     async def session_telemetry(session_id: int, t_from: int | None = None, t_to: int | None = None,
-                                limit: int = 100_000):
-        return await asyncio.to_thread(db.get_telemetry, session_id, t_from, t_to, limit)
+                                limit: int = 100_000, offset: int = 0):
+        return await asyncio.to_thread(db.get_telemetry, session_id, t_from, t_to, limit, offset)
+
+    @app.get("/api/sessions/{session_id}/columns")
+    async def session_columns(session_id: int, max_points: int = 20_000):
+        """Telemetría en columnas para gráficas, submuestreada a `max_points` como mucho."""
+        return await asyncio.to_thread(db.get_telemetry_columns, session_id, max_points)
+
+    @app.get("/api/sessions/{session_id}/telemetry.csv")
+    async def session_csv(session_id: int):
+        s = await asyncio.to_thread(db.get_session, session_id)
+        if not s:
+            raise HTTPException(404, "sesión no encontrada")
+        cols = [c for _, c in TEL_FIELDS]
+        t0 = s["t_first"] or 0
+
+        def rows():
+            yield "t_s,host_ts," + ",".join(cols) + "\n"
+            for r in db.iter_telemetry(session_id):
+                t = "" if r["t_ms"] is None else f"{(r['t_ms'] - t0) / 1000:.3f}"
+                vals = ["" if r[c] is None else str(r[c]) for c in cols]
+                yield f"{t},{r['host_ts']:.3f}," + ",".join(vals) + "\n"
+
+        name = f"balancin_sesion{session_id}.csv"
+        return StreamingResponse(rows(), media_type="text/csv",
+                                 headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.get("/api/sessions/{session_id}/events")
     async def session_events(session_id: int):

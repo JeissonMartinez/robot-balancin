@@ -5,8 +5,11 @@
  * - Números: slider + campo numérico + unidad; botón ↺ para el valor de fábrica.
  * - enum / signo / booleano: botones de opción; enteros con nombre: selector.
  * - Los cambios quedan "pendientes" (borde dorado). En vivo (por defecto) se envían al
- *   soltar el slider o confirmar el número; sin "en vivo" se acumulan y se envían juntos
- *   con Aplicar, en un solo `set` (todo o nada, útil para kp_min y kp_max a la vez).
+ *   soltar el slider o confirmar el número; el control destella en verde al confirmarlo
+ *   el robot y la cabecera de la tarjeta resume el último cambio (sin mover nada de
+ *   lugar). Sin "en vivo" se acumulan y se envían juntos con Aplicar, en un solo `set`
+ *   (todo o nada, útil para kp_min y kp_max a la vez); la barra de Aplicar queda fija
+ *   mientras dure ese modo.
  * - Lo que el robot confirma llega a todas las pantallas; un valor que alguien está
  *   editando no se pisa.
  */
@@ -44,10 +47,18 @@ export function setupParams(root: HTMLElement, headExtra: HTMLElement, gw: Gatew
   let busy = false;
 
   headExtra.innerHTML = `
+    <span class="par-estado" id="parEstado" aria-live="polite"></span>
     <label class="switch" title="Enviar cada cambio al soltar el slider o confirmar el número">
       <input type="checkbox" id="chkVivo"> En vivo
     </label>`;
   const chkLive = headExtra.querySelector<HTMLInputElement>('#chkVivo')!;
+  const status = headExtra.querySelector<HTMLElement>('#parEstado')!;
+  const rejected = new Map<string, string>(); // clave → motivo del último rechazo
+  function setStatus(text: string, bad = false) {
+    status.textContent = text;
+    status.classList.toggle('bad', bad);
+    status.title = text;
+  }
   chkLive.checked = live;
   chkLive.addEventListener('change', () => {
     live = chkLive.checked;
@@ -190,6 +201,7 @@ export function setupParams(root: HTMLElement, headExtra: HTMLElement, gw: Gatew
 
   // ------------------------------------------------------------ cambios
   function stage(key: string, v: Value, commit: boolean) {
+    rejected.delete(key);
     if (sameValue(robot[key], v)) pending.delete(key);
     else pending.set(key, v);
     refresh();
@@ -203,8 +215,7 @@ export function setupParams(root: HTMLElement, headExtra: HTMLElement, gw: Gatew
     const errs = validate(schema, { ...robot, ...Object.fromEntries(pending) });
     const bad = keys.filter((k) => errs[k]);
     if (bad.length) {
-      msg.textContent = `No se envió: ${errs[bad[0]]}.`;
-      msg.className = 'params-msg err';
+      setStatus(`No se envió: ${errs[bad[0]]}`, true);
       return;
     }
     busy = true;
@@ -214,19 +225,31 @@ export function setupParams(root: HTMLElement, headExtra: HTMLElement, gw: Gatew
     if (ack.ok) {
       keys.forEach((k) => pending.delete(k));
       if (ack.params) robot = ack.params;
-      msg.textContent = '';
+      const d = schema.find((x) => x.key === keys[0]);
+      setStatus(keys.length === 1 && d ? `${keys[0]} = ${formatValue(d, robot[keys[0]])} ✓` : `${keys.length} cambios aplicados ✓`);
+      refresh();
+      for (const k of keys) flash(k);
     } else {
-      msg.textContent = `El robot rechazó el cambio: ${ack.err}`;
-      msg.className = 'params-msg err';
+      for (const k of keys) rejected.set(k, ack.err ?? 'rechazado');
+      setStatus(`Rechazado: ${ack.err}`, true);
       log(`set: ${ack.err}`, true);
+      refresh();
     }
-    refresh();
+  }
+
+  /** Destello verde en el control confirmado por el robot (no cambia el tamaño de nada). */
+  function flash(key: string) {
+    const el = controls.get(key)?.root;
+    if (!el) return;
+    el.classList.remove('aplicado');
+    void el.offsetWidth; // reinicia la animación
+    el.classList.add('aplicado');
   }
 
   btnApply.addEventListener('click', () => apply());
   btnDiscard.addEventListener('click', () => {
     pending.clear();
-    msg.textContent = '';
+    rejected.clear();
     refresh();
   });
 
@@ -273,11 +296,12 @@ export function setupParams(root: HTMLElement, headExtra: HTMLElement, gw: Gatew
       c.enable(on && !busy);
       const ui = uiFor(c.d);
       c.root.classList.toggle('pendiente', pending.has(key));
-      c.root.classList.toggle('error', !!errs[key]);
       c.root.classList.toggle('modificado', robot[key] !== undefined && !sameValue(robot[key], c.d.def));
       c.root.classList.toggle('sin-uso', !!ui.only && !!st && ui.only !== st);
       c.root.querySelector('.only')!.textContent = ui.only && st && ui.only !== st ? ` Sin efecto con ${st}.` : '';
-      c.root.querySelector('.err-msg')!.textContent = errs[key] ? ` ${errs[key]}.` : '';
+      const err = errs[key] ?? rejected.get(key);
+      c.root.classList.toggle('error', !!err);
+      c.root.querySelector('.err-msg')!.textContent = err ? ` ${err}.` : '';
       (c.root.querySelector('.reset') as HTMLButtonElement).disabled = !on || sameValue(v, c.d.def);
     }
     groupsEl.querySelectorAll('details.grupo').forEach((det) => {
@@ -290,14 +314,12 @@ export function setupParams(root: HTMLElement, headExtra: HTMLElement, gw: Gatew
 
   function renderBar() {
     const n = pending.size;
-    bar.hidden = n === 0 && !msg.textContent;
-    btnApply.hidden = btnDiscard.hidden = n === 0;
-    btnApply.disabled = busy || !connected();
-    btnApply.textContent = busy ? 'Enviando…' : `Aplicar ${n}`;
-    if (n && !msg.textContent.startsWith('No se') && !msg.textContent.startsWith('El robot')) {
-      msg.className = 'params-msg';
-      msg.textContent = live ? 'Cambio sin enviar.' : `${n} ${n === 1 ? 'cambio' : 'cambios'} sin aplicar.`;
-    }
+    // Sólo en modo por lotes, y visible todo el tiempo que dure: no aparece y desaparece
+    bar.hidden = live || schema.length === 0;
+    btnApply.disabled = busy || !connected() || n === 0;
+    btnDiscard.disabled = n === 0;
+    btnApply.textContent = busy ? 'Enviando…' : n ? `Aplicar ${n}` : 'Aplicar';
+    msg.textContent = n ? `${n} ${n === 1 ? 'cambio' : 'cambios'} sin aplicar` : 'Sin cambios pendientes';
   }
 
   // ------------------------------------------------------------ datos del gateway

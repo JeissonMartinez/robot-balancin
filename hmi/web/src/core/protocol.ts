@@ -78,6 +78,39 @@ export interface ParamSet {
   params: Params;
 }
 
+/** Sesión guardada en la base del PC. */
+export interface Session {
+  id: number;
+  started_at: string;
+  ended_at: string | null;
+  transport: string;
+  target: string | null;
+  fw: string | null;
+  proto: number | null;
+  params: Params | null;
+  notes: string | null;
+  frames: number;
+  t_first: number | null;
+  t_last: number | null;
+  n_events: number;
+}
+
+/** Fila de la tabla telemetry (nombres de columna de la base). */
+export interface TelemetryRow {
+  session_id: number;
+  host_ts: number;
+  seq: number;
+  t_ms: number;
+  ang: number; ref: number; w: number; pwm: number; pwm_m: number; rpm_l: number; rpm_r: number;
+  kp: number; dt: number; u_p: number | null; u_i: number | null; u_d: number | null; st: string;
+}
+
+export interface SessionColumns {
+  total: number;
+  step: number;
+  columns: Record<string, (number | string | null)[]>;
+}
+
 export type ServerMsg =
   | { type: 'snapshot'; status: Status; schema: ParamDesc[] | null; params: Params | null }
   | { type: 'status'; status: Status }
@@ -85,4 +118,5 @@ export type ServerMsg =
   | { type: 'params'; params: Params }
   | { type: 'event'; event: GwEvent }
   | { type: 'param_sets_changed' }
+  | { type: 'sessions_changed' }
   | ({ type: 'ack'; id: number } & Ack);

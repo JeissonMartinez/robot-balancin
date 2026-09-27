@@ -58,7 +58,7 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
   const lan = root.querySelector<HTMLElement>('#conLan')!;
   const resumen = root.querySelector<HTMLElement>('#conResumen')!;
   const btnDetails = root.querySelector<HTMLButtonElement>('#btnDetalles')!;
-  const narrow = matchMedia('(max-width:1080px)');
+  const narrow = matchMedia('(max-width:1300px)');
   let compact = false;
   let lastState: Status['state'] = 'disconnected';
   btnDetails.addEventListener('click', () => {

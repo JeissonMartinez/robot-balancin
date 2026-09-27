@@ -123,3 +123,34 @@ def test_disconnect_when_idle_records_nothing(client):
     client.post("/api/disconnect")
     kinds = [e["kind"] for e in client.get(f"/api/sessions/{session}/events").json()]
     assert kinds.count("disconnect") == 1
+
+
+def test_history(client):
+    client.post("/api/connect", json={"transport": "demo"})
+    sid = client.get("/api/status").json()["session_id"]
+    time.sleep(1.2)
+    assert client.delete(f"/api/sessions/{sid}").status_code == 409  # en curso
+    client.post("/api/disconnect")
+
+    s = client.get(f"/api/sessions/{sid}").json()
+    assert s["frames"] > 40 and s["t_last"] > s["t_first"] and s["n_events"] >= 2
+
+    r = client.patch(f"/api/sessions/{sid}", json={"notes": "  Kd alto  "}).json()
+    assert r["notes"] == "Kd alto"
+    assert [x["id"] for x in client.get("/api/sessions?q=kd").json()] == [sid]
+    assert client.get("/api/sessions?transport=serial").json() == []
+
+    cols = client.get(f"/api/sessions/{sid}/columns?max_points=10").json()
+    assert cols["total"] == s["frames"] and len(cols["columns"]["ang"]) <= 10 and cols["step"] > 1
+
+    page = client.get(f"/api/sessions/{sid}/telemetry?limit=5&offset=5").json()
+    assert len(page) == 5
+
+    csv = client.get(f"/api/sessions/{sid}/telemetry.csv")
+    lines = csv.text.strip().split("\n")
+    assert lines[0].startswith("t_s,host_ts,seq,t_ms,ang") and len(lines) == s["frames"] + 1
+    assert lines[1].startswith("0.000,")
+
+    assert client.delete(f"/api/sessions/{sid}").status_code == 200
+    assert client.get(f"/api/sessions/{sid}").status_code == 404
+    assert client.get(f"/api/sessions/{sid}/telemetry").json() == []
