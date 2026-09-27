@@ -3,6 +3,7 @@
 
 Uso:
     python3 hmi/tools/protocol_check.py [--port /dev/cu.wchusbserial...] [--save]
+    python3 hmi/tools/protocol_check.py --ws 192.168.4.1        # por WiFi (fw ≥ 0.4.0)
 
 Comprueba hello, schema, get, set válido e inválido, defaults, estop/arm y la
 telemetría JSON a 50 Hz (frecuencia real, huecos de seq y dt). No mueve el robot:
@@ -14,8 +15,8 @@ comprobar que persisten (criterio de aceptación de F0).
 Al terminar deja los parámetros como estaban al empezar (y, con --save, los vuelve
 a guardar en NVS).
 
-Requiere pyserial (incluido en el entorno de PlatformIO:
-~/.platformio/penv/bin/python hmi/tools/protocol_check.py).
+Requiere pyserial y, para --ws, websockets. El entorno del gateway tiene los dos:
+hmi/gateway/.venv/bin/python hmi/tools/protocol_check.py [--ws 192.168.4.1]
 """
 import argparse
 import glob
@@ -23,14 +24,45 @@ import json
 import sys
 import time
 
-import serial
-
 BAUD = 921600
 
 
-class Robot:
+class SerialLink:
     def __init__(self, port):
+        import serial
+
         self.ser = serial.Serial(port, BAUD, timeout=0.05)
+
+    def readline(self):
+        return self.ser.readline().decode("utf-8", "replace")
+
+    def write(self, line):
+        self.ser.write((line + "\n").encode())
+
+
+class WsLink:
+    """Un mensaje WebSocket = una línea. Un mensaje que no sea una línea completa (JSON
+    cortado) aparece como texto y hace fallar las comprobaciones."""
+
+    def __init__(self, host):
+        from websockets.sync.client import connect
+
+        url = host if host.startswith("ws") else f"ws://{host}/ws"
+        self.ws = connect(url, open_timeout=5, max_size=None)
+
+    def readline(self):
+        try:
+            return self.ws.recv(timeout=0.05)
+        except TimeoutError:
+            return ""
+
+    def write(self, line):
+        self.ws.send(line)
+
+
+class Robot:
+    def __init__(self, link):
+        self.link = link
         self.next_id = 1
         self.pending = []  # mensajes JSON recibidos que no son la respuesta esperada
 
@@ -39,10 +71,9 @@ class Robot:
         msgs, text = [], []
         end = time.time() + seconds
         while time.time() < end:
-            raw = self.ser.readline()
-            if not raw:
+            line = self.link.readline().strip()
+            if not line:
                 continue
-            line = raw.decode("utf-8", "replace").strip()
             if line.startswith("{"):
                 try:
                     msgs.append(json.loads(line))
@@ -56,13 +87,10 @@ class Robot:
         mid = self.next_id
         self.next_id += 1
         msg = {"type": "cmd", "id": mid, "cmd": cmd, **fields}
-        self.ser.write((json.dumps(msg) + "\n").encode())
+        self.link.write(json.dumps(msg))
         end = time.time() + timeout
         while time.time() < end:
-            raw = self.ser.readline()
-            if not raw:
-                continue
-            line = raw.decode("utf-8", "replace").strip()
+            line = self.link.readline().strip()
             if not line.startswith("{"):
                 continue
             try:
@@ -91,12 +119,15 @@ def find_port():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default=find_port())
+    ap.add_argument("--ws", metavar="HOST", help="probar por WiFi: IP o nombre del robot (p. ej. 192.168.4.1)")
     ap.add_argument("--save", action="store_true", help="probar persistencia en NVS (pide reiniciar)")
     args = ap.parse_args()
-    if not args.port:
-        sys.exit("No se encontró el puerto. Usar --port.")
-
-    r = Robot(args.port)
+    if args.ws:
+        r = Robot(WsLink(args.ws))
+    elif args.port:
+        r = Robot(SerialLink(args.port))
+    else:
+        sys.exit("No se encontró el puerto. Usar --port o --ws.")
     r.lines(0.5)
     r.cmd("tel", on=False)
     r.lines(0.3)

@@ -55,11 +55,17 @@ struct RxItem
 QueueHandle_t rxQueue = nullptr;
 const size_t MAX_LINE = 1023;
 
-/** Print que junta una línea y la envía como un mensaje WebSocket (a un cliente o a todos). */
+/**
+ * Print que junta una línea completa y la envía como UN mensaje WebSocket (a un cliente o
+ * a todos). La línea no se puede partir: el receptor separa mensajes por trama, y un JSON
+ * cortado en dos no se entiende (la respuesta a "schema" ocupa ~3.5 kB).
+ */
 class WsPrint : public Print
 {
 public:
-  uint32_t target = 0; // 0 = todos
+  static const size_t MAX_MSG = 16384; // tope de seguridad; ningún mensaje del protocolo llega
+  uint32_t target = 0;                 // 0 = todos
+  WsPrint() { line.reserve(1024); }
   size_t write(uint8_t c) override
   {
     if (c == '\n')
@@ -67,12 +73,8 @@ public:
       flush();
       return 1;
     }
-    if (c != '\r')
-    {
-      if (len >= sizeof(buf) - 1)
-        flush();
-      buf[len++] = (char)c;
-    }
+    if (c != '\r' && line.length() < MAX_MSG)
+      line += (char)c;
     return 1;
   }
   size_t write(const uint8_t *data, size_t n) override
@@ -83,22 +85,20 @@ public:
   }
   void flush() override
   {
-    if (!len)
+    if (!line.length())
       return;
-    buf[len] = '\0';
     if (ws.count())
     {
       if (target)
-        ws.text(target, buf, len);
+        ws.text(target, line.c_str(), line.length());
       else
-        ws.textAll(buf, len);
+        ws.textAll(line.c_str(), line.length());
     }
-    len = 0;
+    line = "";
   }
 
 private:
-  char buf[512];
-  size_t len = 0;
+  String line;
 };
 
 WsPrint wsOut;  // respuestas y telemetría
@@ -145,9 +145,10 @@ void loadConfig()
   Preferences p;
   p.begin("wifi", false);
   cfg.mode = (Mode)p.getUChar("mode", (uint8_t)Mode::AP);
-  cfg.ssid = p.getString("ssid", "");
-  cfg.pass = p.getString("pass", "");
-  cfg.apPass = p.getString("ap_pass", "");
+  // isKey evita el error "nvs_get_str ... NOT_FOUND" mientras no se haya guardado nada
+  cfg.ssid = p.isKey("ssid") ? p.getString("ssid") : "";
+  cfg.pass = p.isKey("pass") ? p.getString("pass") : "";
+  cfg.apPass = p.isKey("ap_pass") ? p.getString("ap_pass") : "";
   p.end();
   if ((uint8_t)cfg.mode > 2)
     cfg.mode = Mode::AP;

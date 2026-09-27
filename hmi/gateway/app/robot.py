@@ -252,6 +252,9 @@ class RobotLink:
         try:
             await self.transport.send(json.dumps({"type": "cmd", "id": mid, "cmd": cmd, **(fields or {})}))
             return await asyncio.wait_for(fut, timeout or TIMEOUTS.get(cmd, DEFAULT_TIMEOUT))
+        except asyncio.TimeoutError:
+            # Con mensaje: si no, el error llega vacío a la HMI y al log
+            raise TimeoutError(f"el robot no respondió a «{cmd}»") from None
         finally:
             self._pending.pop(mid, None)
 

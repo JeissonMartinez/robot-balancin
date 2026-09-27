@@ -65,6 +65,14 @@ Las redes con portal de acceso o WPA2-Enterprise (como la universitaria) no sirv
 Si el robot se apaga o sale de alcance, el gateway reintenta solo cada 2 s; **Cancelar reconexión**
 lo detiene.
 
+**Si el celular o la tablet no abren la HMI** en la red del robot (la página queda cargando y en el
+log del gateway no aparece ninguna petición de `192.168.4.x`): el equipo probablemente volvió solo a
+otra red con internet, porque la del robot no tiene. En iOS: Ajustes → Wi-Fi → (i) de la red de casa
+o del laboratorio → desactivar **Conexión automática** mientras se usa el robot, y confirmar que el
+equipo tiene una IP `192.168.4.x`.
+
+Verificar el protocolo por WiFi: `hmi/gateway/.venv/bin/python hmi/tools/protocol_check.py --ws 192.168.4.1`.
+
 - **Desde el celular** (misma red WiFi que el PC):
   1. Arrancar con `.venv/bin/python -m app --host 0.0.0.0`. Sin esa opción el gateway sólo acepta
      conexiones del propio PC.
