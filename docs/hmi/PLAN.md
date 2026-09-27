@@ -6,8 +6,8 @@ cada fase.
 
 Estado (2026-09-26):
 - **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
+- **F4 cerrada y validada en el robot**: WiFi en red local con PC y tablet a la vez; en red propia, bien con una sola pantalla.
 - **F5 implementada** (fw 0.5.0): canal MQTT opcional en el firmware (esp-mqtt, apagado por defecto), transporte MQTT y búsqueda de robots en el gateway, opción MQTT en la HMI, Mosquitto en Docker o nativo, y `link_bench.py` para medir. Pruebas con Mosquitto local y robot simulado. Falta medir con el robot y decidir (tabla abajo).
-- **F4 implementada** (fw 0.4.0): WiFi con red propia por defecto (clave única por robot) o red local con respaldo, WebSocket, mDNS, canales Serial/WiFi independientes; gateway con transporte WiFi y reconexión automática; HMI con opción WiFi y tarjeta «WiFi del robot». Compila; gateway probado contra un robot simulado por WebSocket. Falta cargar el firmware y probar con el robot.
 - **F3 cerrada y validada en el robot**: escena 2D/3D en vivo, historial con reproducción, tabla, eventos y CSV, desde PC, iPad y celular.
 - **F2 cerrada y validada en el robot** (parámetros en vivo y por lotes, validación, juegos, exportar, calibración y zona muerta).
 - **F1 cerrada y validada en el robot**: fw 0.3.0 por USB, 50.1 Hz, 0 tramas perdidas, parámetros leídos de NVS, sesión en SQLite, marcas de eventos en las trazas; acceso por la red local (`--host 0.0.0.0`) confirmado con PC, iPad y celular a la vez.
@@ -218,7 +218,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 | **F1** ✅ | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
 | **F2** ✅ | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
 | **F3** ✅ | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
-| **F4** ✅ código · ⏳ robot | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
+| **F4** ✅ | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
 | **F5** ✅ código · ⏳ medición | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
 | **F6** | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |
 
@@ -233,10 +233,20 @@ completar con el robot (2026-09-26: USB, WebSocket en red local y MQTT con fw 0.
 | WiFi WebSocket (red propia) | | | | |
 | WiFi WebSocket (red local, −56 dBm) | 23.8 / 41.9 | 49.7 | 0.00 % | 21.0 / 132.1 |
 | MQTT (red local, broker en el PC), fw 0.5.0 | 1025.2 / 1081.1 | 1.0 | 0.00 % | 1029.3 / 1064.5 |
-| MQTT (red local, broker en el PC), fw 0.5.1 | | | | |
+| MQTT (red local, broker en el PC), fw 0.5.1 | 21.0 / 27.6 | 50.0 | 0.00 % | 23.5 / 107.1 |
 
 La fila de fw 0.5.0 no es MQTT sino un error del firmware: publicaba con `esp_mqtt_client_enqueue`,
 que en el ESP-IDF 4.4 saca un mensaje por segundo. Corregido en 0.5.1 (publicación directa).
+
+Con 0.5.1 el robot cortaba su conexión al broker cada 8 s a 3 min (registrado en la base como
+`connection_lost` «el robot se desconectó del broker», y en Mosquitto como «closed by client»): el
+tope de 300 ms por operación de red era menor que las pausas del WiFi. En 0.5.2 publica desde una
+tarea propia con 5 s de margen. Pendiente: confirmar con una sesión larga.
+
+**Lectura (red local, −55 dBm):** WebSocket y MQTT rinden igual para la HMI (≈ 20–25 ms de ida y
+vuelta, 50 Hz sin pérdidas, ráfagas de hasta ~0.1 s). USB es 3 veces más rápido y estable. MQTT no
+aporta ventaja en el aula; su valor está en varios robots o un servidor remoto (broker en medio,
+gateway donde sea).
 
 ---
 

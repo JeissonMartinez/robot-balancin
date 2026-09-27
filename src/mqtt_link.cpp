@@ -22,14 +22,20 @@ String topicIn, topicOut, topicStatus, uri;
 
 // Mensajes recibidos (line) o aviso de conexión (line == nullptr), atendidos en loop()
 QueueHandle_t rxQueue = nullptr;
+// Mensajes a publicar: loop() los deja aquí y txTask los envía (ver MqttPrint)
+QueueHandle_t txQueue = nullptr;
+SemaphoreHandle_t clientMutex = nullptr; // txTask no publica mientras se destruye el cliente
+volatile uint32_t dropped = 0;
 const size_t MAX_LINE = 1023;
 /**
- * Junta una línea y la publica en .../out como un mensaje.
+ * Junta una línea y la deja en la cola de envío; txTask la publica en .../out.
  *
- * Se publica directo (esp_mqtt_client_publish, QoS 0) y no con esp_mqtt_client_enqueue:
- * en el ESP-IDF 4.4 la tarea de MQTT saca de su cola un mensaje por vuelta y cada vuelta
- * espera hasta 1 s datos del broker, así que la telemetría salía a 1 Hz. Publicar directo
- * escribe en el socket desde loop(); network_timeout_ms acota lo que puede demorar.
+ * - No esp_mqtt_client_enqueue: en el ESP-IDF 4.4 la tarea de MQTT saca de su cola un
+ *   mensaje por vuelta y cada vuelta espera hasta 1 s, así que la telemetría salía a 1 Hz.
+ * - No publicar desde loop(): una pausa del WiFi frenaría loop(); y acotarla con un
+ *   network_timeout_ms corto hacía que el cliente cortara la conexión en cada pausa.
+ * Con una tarea propia, el margen de red es holgado y loop() nunca espera. Si la cola se
+ * llena (broker o WiFi lentos), el mensaje se descarta y se cuenta en `dropped`.
  */
 class MqttPrint : public Print
 {
@@ -56,12 +62,17 @@ public:
   {
     if (!line.length())
       return;
-    if (client && connected && esp_mqtt_client_publish(client, topicOut.c_str(), line.c_str(), line.length(), 0, 0) < 0)
-      dropped++;
+    if (client && connected)
+    {
+      char *msg = strdup(line.c_str());
+      if (!msg || xQueueSend(txQueue, &msg, 0) != pdTRUE)
+      {
+        free(msg);
+        dropped++;
+      }
+    }
     line = "";
   }
-
-  uint32_t dropped = 0;
 
 private:
   String line;
@@ -74,6 +85,26 @@ Channel channel = {out, {false, true, 1}}; // telemetría apagada hasta que el g
 bool rxPending()
 {
   return rxQueue && uxQueueMessagesWaiting(rxQueue) > 0;
+}
+
+void txTask(void *)
+{
+  char *msg;
+  while (true)
+  {
+    if (xQueueReceive(txQueue, &msg, portMAX_DELAY) != pdTRUE)
+      continue;
+    xSemaphoreTake(clientMutex, portMAX_DELAY);
+    if (client && connected)
+    {
+      if (esp_mqtt_client_publish(client, topicOut.c_str(), msg, strlen(msg), 0, 0) < 0)
+        dropped++;
+    }
+    else
+      dropped++;
+    xSemaphoreGive(clientMutex);
+    free(msg);
+  }
 }
 
 void loadConfig()
@@ -155,7 +186,8 @@ void start()
   c.keepalive = 10;
   c.buffer_size = 2048;     // recepción (comandos)
   c.out_buffer_size = 6144; // envío: la respuesta a "schema" ocupa ~3.5 kB
-  c.network_timeout_ms = 300; // máximo que un envío puede demorar loop() si el broker no responde
+  c.network_timeout_ms = 5000;   // margen para pausas del WiFi (no frena loop(): publica txTask)
+  c.reconnect_timeout_ms = 3000; // reintento si se cae el broker (por defecto 10 s)
   client = esp_mqtt_client_init(&c);
   if (!client)
   {
@@ -171,18 +203,27 @@ void stop()
 {
   if (!client)
     return;
+  xSemaphoreTake(clientMutex, portMAX_DELAY);
   if (connected)
     esp_mqtt_client_publish(client, topicStatus.c_str(), "offline", 0, 1, 1);
   esp_mqtt_client_stop(client);
   esp_mqtt_client_destroy(client);
   client = nullptr;
   connected = false;
+  xSemaphoreGive(clientMutex);
+  char *msg; // lo que quedó sin enviar ya no tiene destino
+  while (xQueueReceive(txQueue, &msg, 0) == pdTRUE)
+    free(msg);
 }
 } // namespace
 
 void mqttInit()
 {
   rxQueue = xQueueCreate(16, sizeof(char *));
+  txQueue = xQueueCreate(32, sizeof(char *)); // ~0.6 s de telemetría
+  clientMutex = xSemaphoreCreateMutex();
+  // Núcleo 0, junto a la red; el control sigue solo en el núcleo 1
+  xTaskCreatePinnedToCore(txTask, "mqttTx", 4096, nullptr, 2, nullptr, 0);
   loadConfig();
   consoleAddMirror(&logOut, rxPending);
 }
@@ -243,7 +284,7 @@ void mqttStatusJson(JsonObject o)
   o["port"] = cfg.port;
   o["connected"] = (bool)connected;
   o["topic"] = String("balancin/") + wifiHostname();
-  o["dropped"] = out.dropped;
+  o["dropped"] = dropped;
 }
 
 bool mqttConfigure(JsonObjectConst in, String &err)

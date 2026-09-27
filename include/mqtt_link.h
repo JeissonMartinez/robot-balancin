@@ -10,7 +10,8 @@
  *
  * Cada mensaje es una línea del protocolo, como por Serial o WebSocket. La telemetría de
  * este canal arranca apagada; el gateway la activa con "tel" al conectarse. Se publica
- * directo desde loop() (QoS 0), con un tope de 300 ms por envío. "hello" se
+ * desde una tarea propia (mqttTx, núcleo 0) con QoS 0, así loop() nunca espera a la red.
+ * "hello" se
  * publica sólo en la primera conexión tras encender: así el gateway reconoce un reinicio
  * real y no lo confunde con una reconexión al broker.
  *
