@@ -7,7 +7,7 @@ cada fase.
 Estado (2026-09-26):
 - **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
 - **F4 cerrada y validada en el robot**: WiFi en red local con PC y tablet a la vez; en red propia, bien con una sola pantalla.
-- **F6 implementada**: celular con pestañas abajo y Seguridad fija; instalable como app; clave de acceso opcional; `hmi/iniciar.sh` (un comando); imagen Docker (gateway + HMI) con Mosquitto en compose. Probado en navegador (celular 375 px) y con pruebas del gateway; la imagen Docker no se construyó aún (Docker no estaba corriendo). Falta la prueba con el robot desde el celular.
+- **F6 cerrada y validada en el robot**: celular con pestañas, app instalable, clave de acceso, arranque en un comando.
 - **F5 cerrada**: MQTT se mantiene como opción (apagado por defecto); fw 0.5.2 publica desde una tarea propia. Pendiente confirmar con una sesión larga que ya no se corta.
 - **F3 cerrada y validada en el robot**: escena 2D/3D en vivo, historial con reproducción, tabla, eventos y CSV, desde PC, iPad y celular.
 - **F2 cerrada y validada en el robot** (parámetros en vivo y por lotes, validación, juegos, exportar, calibración y zona muerta).
@@ -64,6 +64,7 @@ Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno
 | 2026-09-26 | Corrección fw 0.4.0: el servidor web se arranca después de encender la radio (antes abortaba en el arranque: lwIP aún no existía). |
 | 2026-09-26 | F5: MQTT se mantiene como opción (apagado por defecto). En el aula, WiFi directo (mismo rendimiento, sin broker). |
 | 2026-09-26 | F6: celular con pestañas abajo; clave de acceso opcional única (usuarios y roles, en la fase de servidor); despliegue en equipo Linux con Docker. La ESP32-P4 no sirve de gateway (sin Linux: no corre Python, SQLite ni Docker). |
+| 2026-09-26 | Despliegue elegido: servidor en internet (fase F7, se planifica aparte). |
 | 2026-09-26 | Evaluado y descartado por ahora: HMI servida por el propio robot para usarlo sólo con tablet (sin PC). Se sigue con el plan original. Con varias pantallas, robot en red local con router (la red propia del ESP32 no da abasto para reenviar tráfico entre equipos). |
 
 ---
@@ -223,7 +224,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 | **F3** ✅ | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
 | **F4** ✅ | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
 | **F5** ✅ | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
-| **F6** ✅ código · ⏳ robot | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |
+| **F6** ✅ | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |
 
 ### Medición de enlaces (F5)
 
