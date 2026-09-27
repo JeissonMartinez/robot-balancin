@@ -293,6 +293,16 @@ export class Traces {
         legend.append(b);
       });
       head.append(legend);
+      // La leyenda va en una sola fila; si no cabe se desplaza en horizontal (también con la rueda)
+      legend.addEventListener(
+        'wheel',
+        (e) => {
+          if (legend.scrollWidth <= legend.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+          legend.scrollLeft += e.deltaY;
+          e.preventDefault();
+        },
+        { passive: false },
+      );
       host.append(head);
       this.root.append(host);
 

@@ -6,7 +6,7 @@ cada fase.
 
 Estado (2026-09-26):
 - **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
-- **F3 implementada**: escena 2D/3D con la telemetría en vivo y en reproducción, pestaña Historial (sesiones con búsqueda, gráficas reproducibles sincronizadas con la escena, tabla paginada, eventos, notas, CSV, borrado), página a alto completo con columnas de desplazamiento independiente y Seguridad fija. Probada con el robot simulado en escritorio, iPad mini (vertical y horizontal) y celular. Falta la prueba con el robot.
+- **F3 cerrada y validada en el robot**: escena 2D/3D en vivo, historial con reproducción, tabla, eventos y CSV, desde PC, iPad y celular.
 - **F2 cerrada y validada en el robot** (parámetros en vivo y por lotes, validación, juegos, exportar, calibración y zona muerta).
 - **F1 cerrada y validada en el robot**: fw 0.3.0 por USB, 50.1 Hz, 0 tramas perdidas, parámetros leídos de NVS, sesión en SQLite, marcas de eventos en las trazas; acceso por la red local (`--host 0.0.0.0`) confirmado con PC, iPad y celular a la vez.
 
@@ -210,7 +210,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 | **F0** ✅ | `PROTOCOLO.md`; `Params` en tiempo real; parser JSON por Serial; telemetría 50 Hz; `estop`/`arm`; NVS; `hmi/tools/protocol_check.py`. | Desde el monitor serie se cambia `kd_angle` con el robot equilibrando, se guarda, se reinicia y persiste. `protocol_check.py --save` sin fallas. |
 | **F1** ✅ | Gateway con transporte Serial y SQLite; HMI con header, tema, panel de conexión y trazas. | Una sesión se ve en vivo y queda completa en SQLite. |
 | **F2** ✅ | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
-| **F3** ✅ código · ⏳ robot | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
+| **F3** ✅ | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
 | **F4** | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
 | **F5** | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
 | **F6** | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |

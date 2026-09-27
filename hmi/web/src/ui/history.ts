@@ -58,15 +58,18 @@ export function setupHistory(root: HTMLElement, gw: Gateway, log: (m: string, ba
         <div class="hist-vacio muted">Elegir una sesión de la lista.</div>
         <div class="hist-content" hidden>
           <div class="hist-head">
-            <div class="hist-title"><b id="hTitulo"></b><span class="muted" id="hMeta"></span></div>
-            <div class="row">
+            <div class="hist-row">
+              <button class="btn small hist-volver" id="hVolver" type="button" title="Mostrar la lista de sesiones">‹ Sesiones</button>
+              <div class="hist-title" id="hTituloBox"><b id="hTitulo"></b><span class="muted" id="hMeta"></span></div>
+              <div class="seg hist-tabs" role="tablist">
+                <button type="button" data-t="graf">Gráficas</button><button type="button" data-t="tabla">Tabla</button><button type="button" data-t="eventos">Eventos</button>
+              </div>
+            </div>
+            <div class="hist-row">
               <input type="text" id="hNotas" placeholder="Notas de la sesión (Enter para guardar)" maxlength="200">
               <a class="btn small" id="hCsv" download>CSV</a>
               <button class="btn small" id="hBorrar" type="button">Borrar</button>
             </div>
-          </div>
-          <div class="seg hist-tabs" role="tablist">
-            <button type="button" data-t="graf">Gráficas</button><button type="button" data-t="tabla">Tabla</button><button type="button" data-t="eventos">Eventos</button>
           </div>
           <div class="hist-pane" data-p="graf">
             <div class="hist-graf">
@@ -165,6 +168,8 @@ export function setupHistory(root: HTMLElement, gw: Gateway, log: (m: string, ba
     }
   }
 
+  $('#hVolver').addEventListener('click', () => root.querySelector('.hist')!.classList.remove('abierta'));
+
   let searchTimer = 0;
   search.addEventListener('input', () => {
     clearTimeout(searchTimer);
@@ -186,9 +191,11 @@ export function setupHistory(root: HTMLElement, gw: Gateway, log: (m: string, ba
     renderList();
     empty.hidden = true;
     content.hidden = false;
+    root.querySelector('.hist')!.classList.add('abierta'); // en pantallas medianas se pliega la lista
     $('#hTitulo').textContent = `Sesión #${s.id}`;
     $('#hMeta').textContent = ` · ${fmtDate(s.started_at)} · ${fmtDuration(s.t_first !== null && s.t_last !== null ? s.t_last - s.t_first : null)} · ${s.transport === 'demo' ? 'robot simulado' : s.target ?? ''}${s.fw ? ` · fw ${s.fw}` : ''}`;
     notes.value = s.notes ?? '';
+    $('#hTituloBox').title = `${$('#hTitulo').textContent}${$('#hMeta').textContent}`;
     $<HTMLAnchorElement>('#hCsv').href = api.csvUrl(s.id);
     $<HTMLButtonElement>('#hBorrar').disabled = s.id === gw.status?.session_id;
     page = 0;
@@ -228,7 +235,7 @@ export function setupHistory(root: HTMLElement, gw: Gateway, log: (m: string, ba
     }
     poses = posesFromColumns(c);
     posEl.max = String(Math.max(0, times.length - 1));
-    $('#hNota').textContent = data.total
+    $('#hNota').title = $('#hNota').textContent = data.total
       ? `${fmtInt(data.total)} tramas${step > 1 ? ` · se dibuja 1 de cada ${step} (la tabla y el CSV tienen todas)` : ''}. Arrastrar sobre las trazas para acercar; doble clic para volver. La posición del eje se integra desde las RPM.`
       : 'La sesión no tiene telemetría.';
     seekIndex(0);

@@ -110,17 +110,19 @@ main{
 .hist-det{display:flex; flex-direction:column; min-height:0; min-width:0}
 .hist-content{display:flex; flex-direction:column; flex:1; min-height:0; gap:8px; padding:8px 10px}
 .hist-head{display:flex; flex-direction:column; gap:6px}
-.hist-title{font-size:13px}
-.hist-head .row input{flex:1; min-width:160px}
+.hist-row{display:flex; align-items:center; gap:8px; min-width:0}
+.hist-title{font-size:13px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hist-row input{flex:1; min-width:120px}
+.hist-volver{display:none; flex:none}
+.hist-tabs{flex:none}
 .hist-head a.btn{text-decoration:none; display:inline-flex; align-items:center}
-.hist-tabs{align-self:flex-start}
 .hist-pane{flex:1; min-height:0; display:flex; flex-direction:column; gap:6px}
 .hist-graf{flex:1; min-height:0; display:grid; grid-template-columns:minmax(220px,32%) minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:10px}
 .hist-graf .plots{min-height:0; overflow-y:auto; padding:0}
-.player{display:flex; align-items:center; gap:8px}
+.player{display:flex; align-items:center; gap:8px; flex:none}
 .player input[type=range]{flex:1; accent-color:var(--azul)}
 .player select{min-height:28px; padding:2px 6px}
-.hist-nota{font-size:11px}
+.hist-nota{font-size:11px; flex:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .hist-nota.err{color:var(--rojo)}
 .pager{gap:6px}
 .tabla-wrap{flex:1; min-height:0; overflow:auto; border:1px solid var(--line-soft); border-radius:6px}
@@ -132,9 +134,14 @@ table.tel tbody tr:hover{background:var(--surface-2)}
 .log .ln.click{cursor:pointer}
 .log .ln.click:hover{background:var(--surface-2)}
 
+/* Pantallas medianas: al abrir una sesión la lista se pliega (botón «‹ Sesiones») y la
+   escena y las trazas quedan lado a lado, con la barra de reproducción siempre visible */
 @media (min-width:701px) and (max-width:1300px){
-  .hist{grid-template-columns:210px minmax(0,1fr)}
-  .hist-graf{grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(200px,40%) minmax(0,1fr)}
+  .hist{grid-template-columns:230px minmax(0,1fr)}
+  .hist.abierta{grid-template-columns:minmax(0,1fr)}
+  .hist.abierta .hist-list{display:none}
+  .hist.abierta .hist-volver{display:inline-flex}
+  .hist-graf{grid-template-columns:minmax(200px,36%) minmax(0,1fr)}
 }
 @media (max-width:700px){
   .hist{grid-template-columns:minmax(0,1fr)}
@@ -170,25 +177,30 @@ table.tel tbody tr:hover{background:var(--surface-2)}
 /* ===================== trazas ===================== */
 .plots{display:flex; flex-direction:column; gap:2px; padding:6px 4px 8px}
 .plot{position:relative; min-width:0}
-.plot-head{display:flex; align-items:center; flex-wrap:wrap; gap:2px 12px; padding:2px 6px 0 9px}
+.plot-head{display:flex; align-items:center; flex-wrap:nowrap; gap:10px; padding:2px 6px 0 9px; min-width:0}
 .plot-title{
-  display:flex; align-items:baseline; gap:8px;
+  display:flex; align-items:baseline; gap:8px; flex:none; white-space:nowrap;
   font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);
 }
 .plot-title .u{letter-spacing:0; text-transform:none}
 
 /* Leyenda: la muestra lleva el color y el trazo; el texto va en tinta, nunca en color de serie */
-.legend{display:flex; flex-wrap:wrap; gap:0 2px; margin-left:auto}
+/* Una sola fila siempre: si no cabe, se desplaza en horizontal (sin barra visible) */
+.legend{
+  display:flex; flex-wrap:nowrap; gap:0 1px; margin-left:auto; min-width:0; overflow-x:auto;
+  scrollbar-width:none; overscroll-behavior-x:contain;
+}
+.legend::-webkit-scrollbar{display:none}
 .lg{
   display:inline-flex; align-items:center; gap:6px; border:0; background:none; cursor:pointer;
-  padding:3px 7px; border-radius:6px; font-size:12px; color:var(--ink-2); min-height:28px;
+  padding:3px 6px; border-radius:6px; font-size:12px; color:var(--ink-2); min-height:28px; flex:none; white-space:nowrap;
 }
 .lg:hover{background:var(--surface-2)}
 .lg svg{flex:none}
-.lg .v{color:var(--ink); font-size:11.5px; min-width:5.5ch; text-align:right}
+.lg .v{color:var(--ink); font-size:11.5px; min-width:4.5ch; text-align:right}
 .lg[aria-pressed="false"]{opacity:.5}
 .lg[aria-pressed="false"] .lbl{text-decoration:line-through}
-.lg[aria-pressed="false"] .v{visibility:hidden}
+.lg[aria-pressed="false"] .v{display:none}
 
 .uplot{font-family:inherit}
 .uplot .u-select{background:color-mix(in srgb,var(--azul) 12%,transparent)}
