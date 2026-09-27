@@ -1,8 +1,10 @@
 """Transporte WiFi: WebSocket al servidor del robot (ws://<ip>/ws).
 
 Cada mensaje del robot es una línea (JSON o texto de log), igual que por Serial, así
-que RobotLink no distingue el transporte. El ping cada 2 s detecta si el robot se
-apagó o salió de alcance (sin él, TCP puede tardar minutos en darse cuenta).
+que RobotLink no distingue el transporte. El ping (cada 5 s, 10 s de margen) detecta si
+el robot se apagó o salió de alcance; sin él, TCP puede tardar minutos en darse cuenta.
+El margen es amplio porque la radio del ESP32 puede demorarse unos segundos cuando
+además reenvía tráfico entre otros equipos de su red.
 """
 from __future__ import annotations
 
@@ -39,7 +41,7 @@ class WebSocketTransport(Transport):
         self._closing = False
         try:
             self._ws = await websockets.connect(
-                self.url, open_timeout=5, ping_interval=2, ping_timeout=4, max_queue=256,
+                self.url, open_timeout=5, ping_interval=5, ping_timeout=10, max_queue=256,
             )
         except (OSError, asyncio.TimeoutError, websockets.WebSocketException) as e:
             raise ConnectionError(f"no se pudo abrir {self.url}: {e}") from None
@@ -63,7 +65,10 @@ class WebSocketTransport(Transport):
     async def send(self, line: str) -> None:
         if not self._ws:
             raise ConnectionError("WebSocket cerrado")
-        await self._ws.send(line)
+        try:
+            await self._ws.send(line)
+        except websockets.ConnectionClosed as e:
+            raise ConnectionError("WiFi: conexión cerrada") from None
 
     async def close(self) -> None:
         self._closing = True

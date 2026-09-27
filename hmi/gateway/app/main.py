@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -60,6 +61,9 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
 
     app = FastAPI(title="Gateway balancín", version=__version__, lifespan=lifespan)
     app.state.link = link
+    # La HMI comprimida (~30 kB en vez de ~80 kB) carga más rápido en redes lentas, como la
+    # red propia del robot, donde el ESP32 reenvía todo entre equipos
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.state.db = db
 
     @app.get("/api/health")

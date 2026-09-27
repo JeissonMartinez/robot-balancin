@@ -154,3 +154,12 @@ def test_history(client):
     assert client.delete(f"/api/sessions/{sid}").status_code == 200
     assert client.get(f"/api/sessions/{sid}").status_code == 404
     assert client.get(f"/api/sessions/{sid}/telemetry").json() == []
+
+
+def test_static_is_compressed(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>" + "x" * 5000 + "</html>")
+    with TestClient(create_app(db_path=tmp_path / "t.db", web_dist=dist)) as c:
+        r = c.get("/", headers={"accept-encoding": "gzip"})
+        assert r.status_code == 200 and r.headers.get("content-encoding") == "gzip"

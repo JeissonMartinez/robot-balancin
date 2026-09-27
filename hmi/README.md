@@ -65,6 +65,13 @@ Las redes con portal de acceso o WPA2-Enterprise (como la universitaria) no sirv
 Si el robot se apaga o sale de alcance, el gateway reintenta solo cada 2 s; **Cancelar reconexión**
 lo detiene.
 
+**Varias pantallas: usar un router.** En la red propia del robot, todo lo que la tablet o el celular
+reciben del PC pasa por el ESP32, que es un punto de acceso muy limitado: la página tarda o no
+termina de cargar y la conexión del PC con el robot puede cortarse. La red propia sirve bien para
+**un** equipo (el PC). Para PC + tablet + celular, poner el robot en **Red local** con un router
+(el del laboratorio, uno de viaje, o el de casa): el router hace ese trabajo y todos quedan en la
+misma red.
+
 **Si el celular o la tablet no abren la HMI** en la red del robot (la página queda cargando y en el
 log del gateway no aparece ninguna petición de `192.168.4.x`): el equipo probablemente volvió solo a
 otra red con internet, porque la del robot no tiene. En iOS: Ajustes → Wi-Fi → (i) de la red de casa
