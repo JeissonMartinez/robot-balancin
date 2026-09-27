@@ -59,6 +59,7 @@ Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno
 | 2026-09-26 | WiFi: red propia siempre al encender (modo configurable desde la HMI y guardado en NVS); clave única por robot derivada del chip. |
 | 2026-09-26 | WebSocket con `esp32async/ESPAsyncWebServer` (tarea de red en el núcleo 0); los comandos se encolan y se atienden en `loop()`. Serial y WiFi son canales con telemetría independiente. |
 | 2026-09-26 | El gateway reintenta solo las conexiones WiFi perdidas (cada 2 s). |
+| 2026-09-26 | Corrección fw 0.4.0: el servidor web se arranca después de encender la radio (antes abortaba en el arranque: lwIP aún no existía). |
 
 ---
 

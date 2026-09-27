@@ -43,6 +43,7 @@ uint32_t staStartMs = 0;
 bool staAnnounced = false;
 uint32_t applyAtMs = 0; // reconfiguración pendiente (0 = ninguna)
 uint32_t lastCleanupMs = 0;
+bool serverStarted = false;
 String apSsid, apPassDefault, hostname;
 
 // Mensajes recibidos por WebSocket, atendidos en loop(). line == nullptr: cliente nuevo
@@ -139,8 +140,10 @@ const String &apPassword()
 // ------------------------------------------------------------------ NVS
 void loadConfig()
 {
+  // Lectura-escritura: en sólo lectura, la primera vez (namespace inexistente) el core
+  // registra un error "nvs_open failed: NOT_FOUND" aunque no pase nada
   Preferences p;
-  p.begin("wifi", true);
+  p.begin("wifi", false);
   cfg.mode = (Mode)p.getUChar("mode", (uint8_t)Mode::AP);
   cfg.ssid = p.getString("ssid", "");
   cfg.pass = p.getString("pass", "");
@@ -169,6 +172,17 @@ void startAP(bool fallback)
   WiFi.mode(WIFI_AP);
   WiFi.softAP(apSsid.c_str(), apPassword().c_str(), 1, 0, 4);
   active = fallback ? Active::ApFallback : Active::AP;
+}
+
+// El servidor necesita la pila TCP/IP (lwIP), que en Arduino-ESP32 2.x se crea al
+// encender la radio: arrancarlo antes aborta el programa (assert en tcpip_api_call).
+// Por eso se arranca aquí, después de WiFi.mode(), y una sola vez.
+void startServer()
+{
+  if (serverStarted)
+    return;
+  server.begin();
+  serverStarted = true;
 }
 
 void startMdns()
@@ -205,6 +219,7 @@ void applyConfig()
     break;
   }
   WiFi.setSleep(false); // menor latencia
+  startServer();
   startMdns();
 }
 
@@ -273,7 +288,6 @@ void wifiInit()
     serializeJson(doc, body);
     req->send(200, "application/json", body);
   });
-  server.begin();
 
   consoleSetMirror(&wsLog, rxPending);
   applyConfig();
@@ -301,6 +315,7 @@ void wifiLoop()
       Console.printf(">> WiFi: no se pudo conectar a «%s». Se levanta la red propia.\n", cfg.ssid.c_str());
       WiFi.disconnect(true);
       startAP(true);
+      startServer();
       startMdns();
       wifiPrintInfo(Console);
     }
