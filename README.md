@@ -143,7 +143,7 @@ Los motorreductores (1:119) se comportan casi como fuentes de velocidad. Con el 
 | `wifi_link.h/.cpp` | WiFi (red propia / red local / apagado, en NVS), servidor WebSocket y mDNS. Los comandos por WiFi se atienden en `loop()`. |
 | `mqtt_link.h/.cpp` | Canal MQTT opcional (esp-mqtt), configuración en NVS. |
 | `console.h/.cpp` | Salida de texto para humanos por Serial y WiFi a la vez. |
-| `protocol.h/.cpp` | Protocolo con la HMI: comandos JSON, respuestas y formato de telemetría ([PROTOCOLO.md](docs/hmi/PROTOCOLO.md)). |
+| `protocol.h/.cpp` | Protocolo con la HMI: comandos JSON, respuestas y formato de telemetría (`docs/hmi/PROTOCOLO.md` (documentación interna)). |
 | `encoders.h/.cpp` | ISRs de encoders (IRAM-safe), lectura atómica y RPM filtradas. |
 | `motors.h/.cpp` | PWM LEDC, driver TB6612FNG y compensación de zona muerta. |
 | `mpu_block.h/.cpp` | MPU6050: conexión, filtro pasa-bajas, calibración en NVS y filtro complementario. |
@@ -158,7 +158,7 @@ En `test/` se guardan sketches y versiones anteriores (`*.old`) como histórico;
 
 ## 🎛️ Parámetros de ajuste
 
-Los valores de `config.h` son los **de fábrica**. En ejecución se cambian con el comando `set` (por Serial hoy, desde la HMI después) y se guardan con `save` en NVS. Si hay parámetros guardados, **al arrancar mandan sobre `config.h`**; para volver a fábrica: `defaults` y `save`. Lista completa, rangos y reglas en [PROTOCOLO.md §4](docs/hmi/PROTOCOLO.md#4-parámetros).
+Los valores de `config.h` son los **de fábrica**. En ejecución se cambian con el comando `set` (por Serial hoy, desde la HMI después) y se guardan con `save` en NVS. Si hay parámetros guardados, **al arrancar mandan sobre `config.h`**; para volver a fábrica: `defaults` y `save`. Lista completa, rangos y reglas en `docs/hmi/PROTOCOLO.md` (documentación interna).
 
 | Clave | Constante (`config.h`) | Fábrica | Qué hace |
 |---|---|---|---|
@@ -208,7 +208,7 @@ Los pines están fijados por la PCB. GPIO 3 y 46 son pines de arranque (*strappi
 
 ### Telemetría (Serial, 921600 baudios)
 
-Por defecto sale en texto cada 100 ms (legible en el monitor). Con `j` o el comando `tel` pasa a JSON a 50 Hz, que es lo que usa la HMI ([formato](docs/hmi/PROTOCOLO.md#tel--telemetría)).
+Por defecto sale en texto cada 100 ms (legible en el monitor). Con `j` o el comando `tel` pasa a JSON a 50 Hz, que es lo que usa la HMI (`docs/hmi/PROTOCOLO.md` (documentación interna)).
 
 ```
 Ang: 0.53 | Ref: -0.21 | w: -4.2 | PWM: -12.4 | RPM L: 0.0 | RPM R: -2.9 | Kp: 70.00 | dt: 0.0200 | ACTIVO
@@ -243,7 +243,7 @@ Escribe la letra en el monitor (no hace falta Enter):
 
 `d` y `c` pausan el control antes de actuar. Al terminar, el control se reactiva cuando el robot se pone vertical.
 
-Una línea que empieza con `{` es un comando JSON (`set`, `get`, `save`, `schema`, ...), descrito en [PROTOCOLO.md](docs/hmi/PROTOCOLO.md). Ejemplo: `{"type":"cmd","id":1,"cmd":"set","params":{"kd_angle":1.3}}`.
+Una línea que empieza con `{` es un comando JSON (`set`, `get`, `save`, `schema`, ...), descrito en `docs/hmi/PROTOCOLO.md` (documentación interna). Ejemplo: `{"type":"cmd","id":1,"cmd":"set","params":{"kd_angle":1.3}}`.
 
 ---
 
@@ -267,7 +267,9 @@ Más detalle en [Doc_Technical.md](Doc_Technical.md).
 
 ## 🖥️ HMI (en desarrollo)
 
-Laboratorio web para monitorear, sintonizar y registrar el robot desde el PC o el celular. Plan, decisiones y fases en [docs/hmi/PLAN.md](docs/hmi/PLAN.md).
+Laboratorio web para monitorear, sintonizar y registrar el robot desde el PC o el celular.
+
+> La documentación de diseño de la HMI (`docs/`: plan y fases, protocolo, API del gateway) es interna y no se publica en este repositorio.
 
 Hoy: conexión por USB o WiFi (o robot simulado); escena 2D/3D y trazas a 50 Hz con marcas de eventos; parámetros en vivo y juegos de parámetros; comandos; parada de emergencia; historial de cada sesión en SQLite con reproducción, tabla y CSV. Desde PC, tablet o celular. Instalación y uso en [hmi/README.md](hmi/README.md).
 

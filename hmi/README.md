@@ -1,7 +1,7 @@
 # HMI del balancín
 
 Laboratorio web para monitorear, sintonizar y registrar el robot. Plan y fases en
-[docs/hmi/PLAN.md](../docs/hmi/PLAN.md).
+`docs/hmi/PLAN.md` (documentación interna).
 
 ```
 robot ──USB 921600 ─────┐
@@ -11,9 +11,9 @@ robot ──USB 921600 ─────┐
 
 | Carpeta | Qué es | Documentación |
 |---|---|---|
-| `gateway/` | Enlace con el robot, API y base de datos | [GATEWAY.md](../docs/hmi/GATEWAY.md) |
+| `gateway/` | Enlace con el robot, API y base de datos | `docs/hmi/GATEWAY.md` (documentación interna) |
 | `web/` | Interfaz (TypeScript + Vite, sin framework) | este archivo |
-| `tools/` | `protocol_check.py` (verificación del protocolo, por USB o `--ws`), `link_bench.py` (medición de enlaces) | [PROTOCOLO.md](../docs/hmi/PROTOCOLO.md) |
+| `tools/` | `protocol_check.py` (verificación del protocolo, por USB o `--ws`), `link_bench.py` (medición de enlaces) | `docs/hmi/PROTOCOLO.md` (documentación interna) |
 | `iniciar.sh` | Arranque en un comando (instala, compila, arranca) | este archivo |
 | `Dockerfile`, `docker-compose.yml`, `mosquitto/` | Imagen del laboratorio (gateway + HMI) y broker MQTT | este archivo |
 
@@ -120,7 +120,7 @@ Verificar el protocolo por WiFi: `hmi/gateway/.venv/bin/python hmi/tools/protoco
   **Exportar** / **Importar JSON** sirven para compartirlos entre equipos.
 - El monitor serie de PlatformIO y el gateway no pueden usar el puerto a la vez.
 - Los datos quedan en `hmi/gateway/data/balancin.db` (fuera de git). Cómo revisarlos:
-  [GATEWAY.md §5](../docs/hmi/GATEWAY.md#5-revisar-la-base-de-datos).
+  `docs/hmi/GATEWAY.md` (documentación interna).
 
 ### MQTT (opcional)
 

@@ -12,3 +12,6 @@ __pycache__/
 hmi/web/node_modules/
 hmi/web/dist/
 hmi/.env
+
+# Documentación interna de diseño (no se publica)
+docs/
