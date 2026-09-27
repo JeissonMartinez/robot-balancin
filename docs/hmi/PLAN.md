@@ -64,7 +64,7 @@ Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno
 | 2026-09-26 | Corrección fw 0.4.0: el servidor web se arranca después de encender la radio (antes abortaba en el arranque: lwIP aún no existía). |
 | 2026-09-26 | F5: MQTT se mantiene como opción (apagado por defecto). En el aula, WiFi directo (mismo rendimiento, sin broker). |
 | 2026-09-26 | F6: celular con pestañas abajo; clave de acceso opcional única (usuarios y roles, en la fase de servidor); despliegue en equipo Linux con Docker. La ESP32-P4 no sirve de gateway (sin Linux: no corre Python, SQLite ni Docker). |
-| 2026-09-26 | Despliegue elegido: servidor en internet (fase F7, se planifica aparte). |
+| 2026-09-26 | Despliegue: servidor en internet (VPS de pago, dominio propio, varios robots, roles docente/estudiante/invitado), como parte de una plataforma de docencia propia. Planificado en [F7_SERVIDOR.md](F7_SERVIDOR.md); no se ejecuta aún. |
 | 2026-09-26 | Evaluado y descartado por ahora: HMI servida por el propio robot para usarlo sólo con tablet (sin PC). Se sigue con el plan original. Con varias pantallas, robot en red local con router (la red propia del ESP32 no da abasto para reenviar tráfico entre equipos). |
 
 ---
@@ -225,6 +225,7 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 | **F4** ✅ | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
 | **F5** ✅ | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
 | **F6** ✅ | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |
+| **F7** 📝 planificada | Servidor propio y plataforma de docencia: dominio, VPS, HTTPS, MQTT con TLS, cuentas y roles, cursos, varios robots. Ver [F7_SERVIDOR.md](F7_SERVIDOR.md). | Se define al iniciarla (fases F7.0–F7.6). |
 
 ### Medición de enlaces (F5)
 
