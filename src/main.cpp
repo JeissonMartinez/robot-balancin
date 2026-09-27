@@ -8,6 +8,8 @@
 #include "params.h"
 #include "protocol.h"
 #include "tasks_block.h"
+#include "console.h"
+#include "wifi_link.h"
 
 // Devuelve true una vez por pulsación: LOW estable BTN_DEBOUNCE_MS y luego soltado.
 static bool calibrationButtonPressed()
@@ -22,24 +24,28 @@ static bool calibrationButtonPressed()
   return true;
 }
 
+// Canal Serial: telemetría en texto a 10 Hz por defecto, legible en el monitor
+static Channel serialChannel = {Serial, {true, false, TELEMETRY_DIV_DEFAULT}};
+
 static void printHelp()
 {
-  Serial.println();
-  Serial.println("Comandos (escribir la letra en el monitor serie):");
-  Serial.println("  d  prueba de zona muerta de motores");
-  Serial.println("  c  calibrar MPU (igual que el botón)");
-  Serial.println("  t  pausar / reanudar la telemetría");
-  Serial.println("  j  telemetría en JSON a 50 Hz / en texto a 10 Hz");
-  Serial.println("  e  parada de emergencia (motores off, no se re-arma)");
-  Serial.println("  a  liberar la parada de emergencia");
-  Serial.println("  p  mostrar los parámetros activos (JSON)");
-  Serial.println("  ?  esta ayuda");
-  Serial.println("Las líneas que empiezan con '{' son comandos JSON (docs/hmi/PROTOCOLO.md).");
+  Console.println();
+  Console.println("Comandos (escribir la letra en el monitor serie):");
+  Console.println("  d  prueba de zona muerta de motores");
+  Console.println("  c  calibrar MPU (igual que el botón)");
+  Console.println("  t  pausar / reanudar la telemetría");
+  Console.println("  j  telemetría en JSON a 50 Hz / en texto a 10 Hz");
+  Console.println("  e  parada de emergencia (motores off, no se re-arma)");
+  Console.println("  a  liberar la parada de emergencia");
+  Console.println("  p  mostrar los parámetros activos (JSON)");
+  Console.println("  w  estado del WiFi (red, clave, dirección)");
+  Console.println("  ?  esta ayuda");
+  Console.println("Las líneas que empiezan con '{' son comandos JSON (docs/hmi/PROTOCOLO.md).");
 }
 
 static void reportPaused(bool ok)
 {
-  Serial.println(ok ? ">> Control reanudado (se activa al poner el robot vertical)."
+  Console.println(ok ? ">> Control reanudado (se activa al poner el robot vertical)."
                     : ">> ERROR: la tarea de control no se detuvo. Acción cancelada.");
 }
 
@@ -57,31 +63,35 @@ static void handleKey(char cmd)
     break;
   case 't':
   case 'T':
-    telemetryOutput().enabled = !telemetryOutput().enabled;
-    Serial.println(telemetryOutput().enabled ? ">> Telemetría reanudada." : ">> Telemetría en pausa.");
+    serialChannel.tel.enabled = !serialChannel.tel.enabled;
+    Console.println(serialChannel.tel.enabled ? ">> Telemetría reanudada." : ">> Telemetría en pausa.");
     break;
   case 'j':
   case 'J':
   {
-    TelemetryOutput &o = telemetryOutput();
+    TelemetryOutput &o = serialChannel.tel;
     o.json = !o.json;
     o.div = o.json ? 1 : TELEMETRY_DIV_DEFAULT;
-    Serial.println(o.json ? ">> Telemetría JSON a 50 Hz." : ">> Telemetría en texto a 10 Hz.");
+    Console.println(o.json ? ">> Telemetría JSON a 50 Hz." : ">> Telemetría en texto a 10 Hz.");
     break;
   }
   case 'e':
   case 'E':
     setEStop(true);
-    Serial.println(">> PARADA DE EMERGENCIA. Enviar 'a' para liberar.");
+    Console.println(">> PARADA DE EMERGENCIA. Enviar 'a' para liberar.");
     break;
   case 'a':
   case 'A':
     setEStop(false);
-    Serial.println(">> Parada liberada. El control se activa al poner el robot vertical.");
+    Console.println(">> Parada liberada. El control se activa al poner el robot vertical.");
     break;
   case 'p':
   case 'P':
     protocolWriteParams(Serial);
+    break;
+  case 'w':
+  case 'W':
+    wifiPrintInfo(Console);
     break;
   case '?':
   case 'h':
@@ -128,7 +138,7 @@ static void pollSerial()
         continue;
       }
       line[len] = '\0';
-      protocolHandleLine(line, Serial);
+      protocolHandleLine(line, serialChannel);
     }
     else if (len < sizeof(line) - 1)
       line[len++] = c;
@@ -137,14 +147,19 @@ static void pollSerial()
   }
 }
 
+// Cada trama va a cada canal según su propia configuración (tel). Por WiFi, si algún
+// cliente tiene la cola llena, la trama se descarta en vez de acumular retraso.
 static void pumpTelemetry()
 {
   Telemetry t;
-  const TelemetryOutput &o = telemetryOutput();
+  const TelemetryOutput &s = serialChannel.tel;
+  Channel &w = wifiChannel();
   while (receiveTelemetry(t))
   {
-    if (o.enabled && t.seq % o.div == 0)
-      protocolWriteTelemetry(t, Serial, o.json);
+    if (s.enabled && t.seq % s.div == 0)
+      protocolWriteTelemetry(t, Serial, s.json);
+    if (w.tel.enabled && t.seq % w.tel.div == 0 && wifiHasClients() && wifiCanSend())
+      protocolWriteTelemetry(t, w.out, w.tel.json);
   }
 }
 
@@ -162,29 +177,30 @@ void setup()
 
   if (!setupMPU(p.mpuDlpfMode))
   {
-    Serial.println(">> ERROR: MPU6050 no responde. Revisar cableado I2C (SDA 41, SCL 42).");
+    Console.println(">> ERROR: MPU6050 no responde. Revisar cableado I2C (SDA 41, SCL 42).");
     while (true)
       delay(1000);
   }
 
   if (loadCalibration())
-    Serial.println(">> Calibración cargada de memoria.");
+    Console.println(">> Calibración cargada de memoria.");
   else
-    Serial.println(">> No existe calibración guardada. Necesitas presionar el botón.");
+    Console.println(">> No existe calibración guardada. Necesitas presionar el botón.");
 
   setupEncoders();
   initNeural(p);
   resetAngleFromAccel();
 
   startControlTask();
+  wifiInit();
 
-  Serial.printf("Firmware %s · protocolo v%d\n", FW_VERSION, PROTOCOL_VERSION);
-  Serial.printf("Parámetros: %s\n", paramsLoadedFromNvs() ? "guardados en NVS" : "de fábrica (config.h)");
-  Serial.printf("Estructura de control: %s\n",
+  Console.printf("Firmware %s · protocolo v%d\n", FW_VERSION, PROTOCOL_VERSION);
+  Console.printf("Parámetros: %s\n", paramsLoadedFromNvs() ? "guardados en NVS" : "de fábrica (config.h)");
+  Console.printf("Estructura de control: %s\n",
                 p.structure == ControlStructure::SpeedOuter
                     ? "SpeedOuter (velocidad -> angulo -> PWM)"
                     : "AngleOuter (angulo -> velocidad -> PWM)");
-  Serial.println("Robot listo. Ponlo vertical para activar el control; botón = calibrar MPU.");
+  Console.println("Robot listo. Ponlo vertical para activar el control; botón = calibrar MPU.");
   printHelp();
   protocolHello(Serial);
 }
@@ -193,11 +209,12 @@ void loop()
 {
   if (calibrationButtonPressed())
   {
-    Serial.println(">> Botón presionado. Deteniendo robot para calibrar...");
+    Console.println(">> Botón presionado. Deteniendo robot para calibrar...");
     reportPaused(runCalibration());
   }
 
   pollSerial();
+  wifiLoop();
   pumpTelemetry();
   delay(5);
 }

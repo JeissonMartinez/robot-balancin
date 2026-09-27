@@ -18,11 +18,12 @@ import { setupParams } from './ui/params';
 import { setupParamSets } from './ui/paramsets';
 import { setupTheme } from './ui/theme';
 import { setupTiles } from './ui/tiles';
+import { setupWifi } from './ui/wifi';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /** Debe coincidir con __version__ del gateway (hmi/gateway/app/__init__.py). */
-const HMI_VERSION = '0.3.1';
+const HMI_VERSION = '0.4.0';
 
 const gw = new Gateway();
 
@@ -34,6 +35,7 @@ const note = (m: string, bad = false) => log.add('hmi', m, bad ? 'bad' : '');
 setupParams($('parametros'), $('parHead'), gw, note);
 setupParamSets($('juegos'), gw, note);
 setupCommands($('comandos'), gw, note);
+setupWifi($('wifi'), gw, note);
 
 // ------------------------------------------------------------ en vivo: escena y trazas
 const traces = new Traces($('plots'));

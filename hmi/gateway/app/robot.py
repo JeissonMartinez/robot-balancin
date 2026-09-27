@@ -7,6 +7,8 @@
   telemetría en paquetes cada 100 ms, estado cada 1 s.
 - Detecta un reinicio del robot (un `hello` que nadie pidió): cierra la sesión,
   reconfigura la telemetría y abre otra.
+- Si la conexión se pierde y el transporte lo permite (WiFi), reintenta cada
+  RECONNECT_S segundos hasta recuperarla o hasta que se pida desconectar.
 """
 from __future__ import annotations
 
@@ -23,10 +25,11 @@ log = logging.getLogger("robot")
 
 PROTOCOL_VERSION = 1
 # Comandos que la HMI puede enviar. `tel` no: la telemetría la administra el gateway.
-CLIENT_COMMANDS = {"hello", "get", "schema", "set", "defaults", "save", "calib", "deadband", "estop", "arm"}
+CLIENT_COMMANDS = {"hello", "get", "schema", "set", "defaults", "save", "calib", "deadband", "estop", "arm", "wifi"}
 TIMEOUTS = {"save": 6.0, "calib": 8.0, "deadband": 40.0}
 DEFAULT_TIMEOUT = 2.0
 TICK = 0.1  # s, período del lazo de reparto
+RECONNECT_S = 2.0
 
 
 class RobotLink:
@@ -55,6 +58,8 @@ class RobotLink:
         self._frames = 0
         self._pump: asyncio.Task | None = None
         self._reconfiguring = False
+        self._factory = None  # crea un transporte igual para reconectar (None = no reconectar)
+        self._retry: asyncio.Task | None = None
 
     # ================================================================ estado
     def status(self) -> dict:
@@ -71,6 +76,7 @@ class RobotLink:
             "rate": round(self.rate, 1),
             "gaps": self.gaps,
             "clients": self.hub.count,
+            "retrying": self._retry is not None,
         }
 
     def snapshot(self) -> dict:
@@ -80,9 +86,16 @@ class RobotLink:
         await self.hub.broadcast({"type": "status", "status": self.status()})
 
     # ================================================================ conexión
-    async def connect(self, transport: Transport):
+    async def connect(self, transport: Transport, reconnect=None):
+        """`reconnect`: función que crea un transporte equivalente; si se da, una conexión
+        perdida se reintenta sola (WiFi)."""
+        self._stop_retry()
         if self.state != "disconnected":
             await self.disconnect()
+        self._factory = reconnect
+        await self._open(transport)
+
+    async def _open(self, transport: Transport):
         self.state, self.error = "connecting", None
         await self._broadcast_status()
         try:
@@ -100,10 +113,17 @@ class RobotLink:
         await self._broadcast_status()
         await self.hub.broadcast(self.snapshot())
 
+    def _stop_retry(self):
+        if self._retry and not self._retry.done():
+            self._retry.cancel()
+        self._retry = None
+
     async def disconnect(self):
+        self._factory = None
+        self._stop_retry()
         if not self.transport:
             return  # ya desconectado: nada que registrar
-        if self.state == "connected":
+        if self.state == "connected" and self.transport.kind == "serial":
             # Deja el monitor serie como estaba: texto a 10 Hz
             try:
                 await self._command_raw("tel", {"fmt": "text", "div": 5, "on": True}, timeout=0.5)
@@ -149,6 +169,27 @@ class RobotLink:
         await self._teardown()
         self.error = reason
         await self._broadcast_status()
+        if self._factory and not self._retry:
+            self._retry = asyncio.create_task(self._retry_loop(reason))
+
+    async def _retry_loop(self, reason: str):
+        attempt = 0
+        try:
+            while self._factory:
+                attempt += 1
+                self.error = f"{reason} · reintentando ({attempt})…"
+                await self._broadcast_status()
+                await asyncio.sleep(RECONNECT_S)
+                if not self._factory:
+                    return
+                try:
+                    await self._open(self._factory())
+                    self._event("reconnect", {"attempts": attempt})
+                    return
+                except Exception:
+                    continue
+        finally:
+            self._retry = None
 
     async def _configure(self):
         """Silencia la telemetría, lee versión, schema y parámetros, abre sesión y activa
@@ -197,6 +238,8 @@ class RobotLink:
             await self._lost(f"no se pudo reconfigurar tras el reinicio: {e}")
         finally:
             self._reconfiguring = False
+        self._factory = None  # crea un transporte igual para reconectar (None = no reconectar)
+        self._retry: asyncio.Task | None = None
 
     # ================================================================ comandos
     async def _command_raw(self, cmd: str, fields: dict | None = None, timeout: float | None = None) -> dict:

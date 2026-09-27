@@ -3,14 +3,9 @@
 #include "motor_test.h"
 #include "mpu_block.h"
 #include "params.h"
+#include "console.h"
+#include "wifi_link.h"
 #include <ArduinoJson.h>
-
-static TelemetryOutput output = {true, false, TELEMETRY_DIV_DEFAULT};
-
-TelemetryOutput &telemetryOutput()
-{
-  return output;
-}
 
 static void send(JsonDocument &doc, Print &out)
 {
@@ -23,9 +18,9 @@ static void send(JsonDocument &doc, Print &out)
 // ---------------------------------------------------------------------------------
 static void calibrateAction()
 {
-  Serial.println(">> Iniciando calibración MPU (robot quieto y vertical)...");
+  Console.println(">> Iniciando calibración MPU (robot quieto y vertical)...");
   calibrateMPU();
-  Serial.println(">> Calibración MPU completa.");
+  Console.println(">> Calibración MPU completa.");
 }
 
 bool runCalibration()
@@ -118,9 +113,10 @@ static void ackParams(Print &out, JsonVariantConst id)
   send(doc, out);
 }
 
-static void handleTel(JsonDocument &in, Print &out, JsonVariantConst id)
+static void handleTel(JsonDocument &in, Channel &ch, JsonVariantConst id)
 {
-  TelemetryOutput next = output;
+  Print &out = ch.out;
+  TelemetryOutput next = ch.tel;
   if (!in["on"].isNull())
   {
     if (!in["on"].is<bool>())
@@ -144,21 +140,40 @@ static void handleTel(JsonDocument &in, Print &out, JsonVariantConst id)
       return ack(out, id, false, "div debe ser entero en [1, 50]");
     next.div = div;
   }
-  output = next;
+  ch.tel = next;
 
   JsonDocument doc;
   doc["type"] = "ack";
   doc["id"] = id;
   doc["ok"] = true;
-  doc["on"] = output.enabled;
-  doc["fmt"] = output.json ? "json" : "text";
-  doc["div"] = output.div;
+  doc["on"] = ch.tel.enabled;
+  doc["fmt"] = ch.tel.json ? "json" : "text";
+  doc["div"] = ch.tel.div;
   doc["dropped"] = droppedTelemetry();
   send(doc, out);
 }
 
-void protocolHandleLine(const char *line, Print &out)
+static void handleWifi(JsonDocument &in, Print &out, JsonVariantConst id)
 {
+  if (!in["set"].isNull())
+  {
+    if (!in["set"].is<JsonObjectConst>())
+      return ack(out, id, false, "set debe ser un objeto");
+    String err;
+    if (!wifiConfigure(in["set"].as<JsonObjectConst>(), err))
+      return ack(out, id, false, err);
+  }
+  JsonDocument doc;
+  doc["type"] = "ack";
+  doc["id"] = id;
+  doc["ok"] = true;
+  wifiStatusJson(doc["wifi"].to<JsonObject>());
+  send(doc, out);
+}
+
+void protocolHandleLine(const char *line, Channel &ch)
+{
+  Print &out = ch.out;
   JsonDocument in;
   DeserializationError e = deserializeJson(in, line);
   if (e)
@@ -222,7 +237,9 @@ void protocolHandleLine(const char *line, Print &out)
     return ack(out, id, true);
   }
   if (strcmp(cmd, "tel") == 0)
-    return handleTel(in, out, id);
+    return handleTel(in, ch, id);
+  if (strcmp(cmd, "wifi") == 0)
+    return handleWifi(in, out, id);
 
   ack(out, id, false, String("comando desconocido: ") + cmd);
 }

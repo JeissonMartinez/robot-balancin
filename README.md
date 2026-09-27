@@ -23,6 +23,7 @@ Firmware para un **robot balancín** (péndulo invertido sobre dos ruedas) basad
 - 💾 **Calibración persistente** de la MPU en memoria no volátil (NVS), sin interrumpir una lectura I2C.
 - 🎚️ **Parámetros ajustables en ejecución** (ganancias, estructura, RN, zona muerta, seguridad) por comandos JSON, validados y guardables en NVS. Base de la [HMI](#️-hmi-en-desarrollo).
 - 🛑 **Parada de emergencia** remota.
+- 📶 **WiFi**: red propia `Balancin-XXXX` (clave única por robot) o red local, con WebSocket para la HMI; el control sigue solo en su núcleo.
 
 ---
 
@@ -138,6 +139,8 @@ Los motorreductores (1:119) se comportan casi como fuentes de velocidad. Con el 
 | `src/main.cpp` | `setup()` y `loop()`: inicialización, botón de calibración, lectura del Serial (teclas y líneas JSON) y envío de telemetría. |
 | `include/config.h` | Pines, PWM, encoders y valores de fábrica de los parámetros ajustables. |
 | `params.h/.cpp` | Parámetros activos en RAM: validación, cambio en ejecución, NVS y descripción (`schema`). |
+| `wifi_link.h/.cpp` | WiFi (red propia / red local / apagado, en NVS), servidor WebSocket y mDNS. Los comandos por WiFi se atienden en `loop()`. |
+| `console.h/.cpp` | Salida de texto para humanos por Serial y WiFi a la vez. |
 | `protocol.h/.cpp` | Protocolo con la HMI: comandos JSON, respuestas y formato de telemetría ([PROTOCOLO.md](docs/hmi/PROTOCOLO.md)). |
 | `encoders.h/.cpp` | ISRs de encoders (IRAM-safe), lectura atómica y RPM filtradas. |
 | `motors.h/.cpp` | PWM LEDC, driver TB6612FNG y compensación de zona muerta. |
@@ -233,6 +236,7 @@ Escribe la letra en el monitor (no hace falta Enter):
 | `e` | Parada de emergencia: motores off y sin re-armado automático. |
 | `a` | Liberar la parada de emergencia. |
 | `p` | Mostrar los parámetros activos (JSON). |
+| `w` | Estado del WiFi: red, clave, dirección. |
 | `?` | Ayuda. |
 
 `d` y `c` pausan el control antes de actuar. Al terminar, el control se reactiva cuando el robot se pone vertical.
@@ -263,7 +267,7 @@ Más detalle en [Doc_Technical.md](Doc_Technical.md).
 
 Laboratorio web para monitorear, sintonizar y registrar el robot desde el PC o el celular. Plan, decisiones y fases en [docs/hmi/PLAN.md](docs/hmi/PLAN.md).
 
-Hoy: conexión por USB (o robot simulado), trazas a 50 Hz con marcas de eventos, parada de emergencia y registro de cada sesión en SQLite. Instalación y uso en [hmi/README.md](hmi/README.md).
+Hoy: conexión por USB o WiFi (o robot simulado); escena 2D/3D y trazas a 50 Hz con marcas de eventos; parámetros en vivo y juegos de parámetros; comandos; parada de emergencia; historial de cada sesión en SQLite con reproducción, tabla y CSV. Desde PC, tablet o celular. Instalación y uso en [hmi/README.md](hmi/README.md).
 
 ```bash
 cd hmi/gateway && .venv/bin/python -m app   # y abrir http://127.0.0.1:8000

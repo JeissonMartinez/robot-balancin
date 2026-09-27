@@ -68,8 +68,8 @@ main{
 @media (max-width:700px){
   main{grid-template-columns:minmax(0,1fr); gap:12px}
   .col, .side-scroll{display:contents}
-  #cardSeguridad{order:1} #cardConexion{order:2} .tiles{order:3} #cardVista{order:4}
-  #cardParametros{order:5} #cardJuegos{order:6} #cardComandos{order:7} #cardRegistro{order:8} .pie{order:9}
+  #cardSeguridad{order:1} #cardConexion{order:2} .tiles{order:3} #cardVista{order:4} #cardWifi{order:5}
+  #cardParametros{order:6} #cardJuegos{order:7} #cardComandos{order:8} #cardRegistro{order:9} .pie{order:10}
   main{display:flex; flex-direction:column}
   .panel-vivo{display:flex; flex-direction:column; gap:8px; padding:8px 4px}
   .panel-vivo .escena-host{height:280px}
@@ -219,8 +219,20 @@ table.tel tbody tr:hover{background:var(--surface-2)}
 .log .ln.cmd .m{color:var(--azul)}
 .log .vacio{padding:6px 13px; color:var(--ink-3)}
 
+.con-ayuda{font-size:11px; line-height:1.35}
+.wifi-vacio{font-size:12px}
+.wifi-body{display:flex; flex-direction:column; gap:10px}
+.wifi-body .kv dd{white-space:normal}
+.wifi-nota{font-size:11px}
+.wifi-modos{align-self:flex-start}
 .con-resumen{display:none; font-size:12px; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-#conexion.compact .con-resumen{display:block}
+#conexion.compact .con-ayuda{font-size:11px; line-height:1.35}
+.wifi-vacio{font-size:12px}
+.wifi-body{display:flex; flex-direction:column; gap:10px}
+.wifi-body .kv dd{white-space:normal}
+.wifi-nota{font-size:11px}
+.wifi-modos{align-self:flex-start}
+.con-resumen{display:block}
 #conexion.compact > .field, #conexion.compact > .kv, #conexion.compact > .lan{display:none}
 .lan{font-size:11.5px; border-top:1px solid var(--line-soft); padding-top:9px}
 .kv{display:grid; grid-template-columns:auto minmax(0,1fr); gap:3px 12px; font-size:12px}

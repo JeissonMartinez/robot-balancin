@@ -39,6 +39,7 @@ export interface Status {
   rate: number;
   gaps: number;
   clients: number;
+  retrying?: boolean; // WiFi: reintentando tras perder la conexión
 }
 
 export interface ParamDesc {

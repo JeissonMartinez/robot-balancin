@@ -4,8 +4,9 @@ Laboratorio web para monitorear, sintonizar y registrar el robot. Plan y fases e
 [docs/hmi/PLAN.md](../docs/hmi/PLAN.md).
 
 ```
-robot ──Serial 921600──► gateway (Python, FastAPI) ──WebSocket──► HMI web (PC / celular)
-                              └─ SQLite: sesiones, telemetría, eventos
+robot ──USB 921600 ─────┐
+      └─WiFi WebSocket ─┴► gateway (Python, FastAPI) ──WebSocket──► HMI web (PC / tablet / celular)
+                               └─ SQLite: sesiones, telemetría, eventos
 ```
 
 | Carpeta | Qué es | Documentación |
@@ -38,8 +39,31 @@ cd hmi/gateway
 .venv/bin/python -m app
 ```
 
-Abrir <http://127.0.0.1:8000>, elegir **USB (serie)** y el puerto del robot (el adaptador USB sale
-primero) y **Conectar**. Sin robot, **Robot simulado** permite probar todo.
+Abrir <http://127.0.0.1:8000>, elegir el transporte y **Conectar**:
+
+- **USB**: el puerto del robot (el adaptador USB sale primero).
+- **WiFi** (fw ≥ 0.4.0): ver abajo.
+- **Simulado**: un robot simulado dentro del gateway, para probar sin hardware.
+
+### Sin cable (WiFi)
+
+Al encender, el robot crea su red **`Balancin-XXXX`** con una clave propia de ese robot
+(**`bal-xxxxxx`**). Para saberla: tarjeta **WiFi del robot** (conectado por USB), tecla `w` en el
+monitor serie, o el mensaje de arranque.
+
+1. Unir el PC a la red del robot. (El PC pierde internet mientras tanto, salvo que tenga cable de red.)
+2. Arrancar el gateway: `.venv/bin/python -m app --host 0.0.0.0`.
+3. En la HMI: **WiFi**, dirección `192.168.4.1`, **Conectar**.
+4. El celular o la tablet también se unen a la red del robot y abren la dirección de «HMI en la red»
+   que imprime el gateway (la IP del PC en esa red, p. ej. `http://192.168.4.2:8000`).
+
+Para usar la red del laboratorio en vez de la del robot: **WiFi del robot → Cambiar la red → Red
+local**, red y clave, **Guardar y aplicar**. El robot se une a esa red (si no puede en 15 s, vuelve a
+la suya) y se conecta con su IP o su nombre `balancin-xxxx.local`. PC y celular siguen con internet.
+Las redes con portal de acceso o WPA2-Enterprise (como la universitaria) no sirven para el robot.
+
+Si el robot se apaga o sale de alcance, el gateway reintenta solo cada 2 s; **Cancelar reconexión**
+lo detiene.
 
 - **Desde el celular** (misma red WiFi que el PC):
   1. Arrancar con `.venv/bin/python -m app --host 0.0.0.0`. Sin esa opción el gateway sólo acepta

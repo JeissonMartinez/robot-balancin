@@ -16,7 +16,7 @@ Base: `http://<host>:8000`. Sin autenticación todavía (ver PLAN §8): por defe
 | `GET /api/health` | — | `{"ok": true}` |
 | `GET /api/transports` | — | Puertos serie disponibles (`usb: true` primero) y velocidad |
 | `GET /api/status` | — | Estado del enlace (ver §3) |
-| `POST /api/connect` | `{"transport": "serial", "port": "/dev/cu...", "baud": 921600}` o `{"transport": "demo"}` | Estado; `502` con `detail` si falla |
+| `POST /api/connect` | `{"transport": "serial", "port": "/dev/cu...", "baud": 921600}`, `{"transport": "wifi", "host": "192.168.4.1"}` (IP, nombre `.local` o `ws://…`) o `{"transport": "demo"}` | Estado; `502` con `detail` si falla. Por WiFi, si la conexión se pierde después, el gateway reintenta cada 2 s (`retrying: true`) hasta recuperarla o hasta `disconnect` |
 | `POST /api/disconnect` | — | Estado. Deja la telemetría del robot en texto a 10 Hz, como el monitor serie espera |
 | `GET /api/sessions` | `limit` (200), `q` (busca en notas, destino, firmware o número), `transport` | Sesiones, la más reciente primero, con `frames`, `t_first`, `t_last` (ms del robot) y `n_events` |
 | `GET /api/sessions/{id}` | — | Una sesión, con `params` al conectar |
@@ -63,7 +63,7 @@ Un mensaje JSON por trama de texto.
 ```
 
 Comandos permitidos: `hello`, `get`, `schema`, `set`, `defaults`, `save`, `calib`, `deadband`,
-`estop`, `arm`. `tel` no: la telemetría la configura el gateway. El `id` lo elige el cliente y vuelve
+`estop`, `arm`, `wifi`. `tel` no: la telemetría la configura el gateway. El `id` lo elige el cliente y vuelve
 en su `ack`; el gateway usa ids propios con el robot.
 
 - Los comandos se envían al robot de a uno, en orden de llegada, excepto `estop`, que no espera
@@ -89,6 +89,7 @@ en su `ack`; el gateway usa ids propios con el robot.
 | `rate` | Tramas por segundo recibidas en el último segundo |
 | `gaps` | Tramas perdidas en la sesión (saltos de `seq`) |
 | `clients` | Pantallas conectadas al WebSocket |
+| `retrying` | WiFi: reintentando tras perder la conexión |
 
 ---
 
@@ -104,6 +105,7 @@ dentro de una sesión.
 | `disconnect` | `target` |
 | `reboot` | — (se cierra la sesión y se abre otra) |
 | `connection_lost` | `reason` |
+| `reconnect` | `attempts`: intentos hasta recuperar la conexión WiFi |
 | `cmd` | `cmd`, sus campos (p. ej. `params`), `ok`, `err`; `source` si vino de un juego (`juego «nombre»`) |
 | `param_set_saved` | `name`, `id` |
 | `log` | `msg`: línea de texto libre del robot |

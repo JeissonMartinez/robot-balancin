@@ -1,6 +1,7 @@
 /**
- * Panel de conexión: elegir transporte (USB serie o robot simulado), puerto,
- * conectar / desconectar y ver el estado del enlace. En F4 se agrega WiFi.
+ * Panel de conexión: elegir transporte (USB serie, WiFi o robot simulado), puerto o
+ * dirección, conectar / desconectar y ver el estado del enlace. Por WiFi, si la conexión
+ * se pierde el gateway reintenta solo; "Cancelar" detiene los reintentos.
  *
  * Al conectar, en tablet y celular el panel se pliega a una línea de resumen para
  * dejar sitio a las trazas; "Detalles" lo despliega.
@@ -8,7 +9,7 @@
 import { api, type Gateway, type SerialPortInfo } from '../core/gateway';
 import type { Status } from '../core/protocol';
 
-type Kind = 'serial' | 'demo';
+type Kind = 'serial' | 'wifi' | 'demo';
 
 const STATE_LABEL: Record<Status['state'], string> = {
   disconnected: 'Desconectado',
@@ -29,8 +30,9 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
   root.innerHTML = `
     <div class="field"><span>Transporte</span>
       <div class="seg" role="group" aria-label="Transporte">
-        <button type="button" data-kind="serial">USB (serie)</button>
-        <button type="button" data-kind="demo">Robot simulado</button>
+        <button type="button" data-kind="serial">USB</button>
+        <button type="button" data-kind="wifi">WiFi</button>
+        <button type="button" data-kind="demo">Simulado</button>
       </div>
     </div>
     <div class="field" data-for="serial"><span>Puerto</span>
@@ -40,6 +42,10 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
       </div>
     </div>
     <div class="con-resumen mono" id="conResumen"></div>
+    <div class="field" data-for="wifi"><span>Dirección del robot</span>
+      <input type="text" id="inHost" placeholder="192.168.4.1" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="muted con-ayuda">Red propia del robot: 192.168.4.1 · En la red local: su IP o su nombre .local (ver «WiFi del robot»).</div>
+    </div>
     <div class="row">
       <button class="btn primary" id="btnConectar" type="button" style="flex:1">Conectar</button>
       <button class="btn" id="btnDetalles" type="button" hidden>Detalles</button>
@@ -50,6 +56,10 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
 
   const segBtns = [...root.querySelectorAll<HTMLButtonElement>('.seg button')];
   const serialField = root.querySelector<HTMLElement>('[data-for="serial"]')!;
+  const wifiField = root.querySelector<HTMLElement>('[data-for="wifi"]')!;
+  const host = root.querySelector<HTMLInputElement>('#inHost')!;
+  host.value = store('robotHost') ?? '192.168.4.1';
+  host.addEventListener('change', () => store('robotHost', host.value.trim()));
   const sel = root.querySelector<HTMLSelectElement>('#selPuerto')!;
   const btnPorts = root.querySelector<HTMLButtonElement>('#btnPuertos')!;
   const btnConnect = root.querySelector<HTMLButtonElement>('#btnConectar')!;
@@ -77,7 +87,8 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
     }
   }
 
-  let kind: Kind = store('transporte') === 'demo' ? 'demo' : 'serial';
+  const savedKind = store('transporte');
+  let kind: Kind = savedKind === 'demo' || savedKind === 'wifi' ? savedKind : 'serial';
   let busy = false;
 
   function setKind(k: Kind) {
@@ -85,6 +96,7 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
     store('transporte', k);
     segBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kind === k)));
     serialField.hidden = k !== 'serial';
+    wifiField.hidden = k !== 'wifi';
   }
   segBtns.forEach((b) => b.addEventListener('click', () => setKind(b.dataset.kind as Kind)));
   setKind(kind);
@@ -117,9 +129,13 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
     showError(null);
     render(gw.status);
     try {
-      if (gw.status?.state === 'disconnected' || !gw.status) {
+      if (gw.status?.retrying) {
+        await api.disconnect(); // cancela los reintentos
+      } else if (gw.status?.state === 'disconnected' || !gw.status) {
         if (kind === 'serial' && !sel.value) throw new Error('Elegir un puerto.');
-        await api.connect(kind, kind === 'serial' ? sel.value : undefined);
+        if (kind === 'wifi' && !host.value.trim()) throw new Error('Escribir la dirección del robot.');
+        store('robotHost', host.value.trim());
+        await api.connect(kind, kind === 'serial' ? { port: sel.value } : kind === 'wifi' ? { host: host.value.trim() } : {});
       } else {
         await api.disconnect();
       }
@@ -145,19 +161,23 @@ export function setupConnection(root: HTMLElement, hint: HTMLElement, gw: Gatewa
     resumen.textContent = on && s
       ? `${s.target?.replace('/dev/', '') ?? '—'} · fw ${s.fw ?? '—'} · ${s.rate.toFixed(1)} Hz · sesión #${s.session_id ?? '—'}`
       : '';
-    btnConnect.textContent = busy ? 'Espere…' : on ? 'Desconectar' : 'Conectar';
-    btnConnect.classList.toggle('primary', !on);
+    const retrying = !!s?.retrying && !on;
+    btnConnect.textContent = busy ? 'Espere…' : retrying ? 'Cancelar reconexión' : on ? 'Desconectar' : 'Conectar';
+    btnConnect.classList.toggle('primary', !on && !retrying);
     btnConnect.disabled = busy || !gw.linkUp;
-    segBtns.forEach((b) => (b.disabled = on));
+    segBtns.forEach((b) => (b.disabled = on || retrying));
+    host.disabled = on || retrying;
     // Conectado: el selector muestra el transporte real, no la última elección guardada
     const shown = on && s?.transport ? s.transport : kind;
     segBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kind === shown)));
     serialField.hidden = shown !== 'serial';
+    wifiField.hidden = shown !== 'wifi';
     sel.disabled = btnPorts.disabled = on;
     hint.innerHTML = gw.linkUp
       ? `<span class="pill ${state === 'connected' ? 'ok' : state === 'connecting' ? 'warn' : ''}">${STATE_LABEL[state]}</span>`
       : '<span class="pill mal">Sin gateway</span>';
     if (s?.error && !busy && state === 'disconnected') showError(s.error);
+    else if (on) showError(null);
 
     const rows: [string, string][] = [];
     if (on && s) {

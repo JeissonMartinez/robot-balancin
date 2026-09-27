@@ -23,14 +23,16 @@ from .robot import RobotLink
 from .storage.db import TEL_FIELDS, Database
 from .transports.demo import DemoTransport
 from .transports.serial_port import DEFAULT_BAUD, SerialTransport, available_ports
+from .transports.websocket import DEFAULT_HOST, WebSocketTransport
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 
 class ConnectRequest(BaseModel):
-    transport: Literal["serial", "demo"]
-    port: str | None = None
+    transport: Literal["serial", "wifi", "demo"]
+    port: str | None = None  # serial
     baud: int = DEFAULT_BAUD
+    host: str | None = None  # wifi: IP, nombre .local o URL ws://
 
 
 class SessionPatch(BaseModel):
@@ -74,7 +76,7 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
     @app.get("/api/transports")
     async def transports():
         ports = await asyncio.to_thread(available_ports)
-        return {"serial": {"ports": ports, "baud": DEFAULT_BAUD}, "demo": {}}
+        return {"serial": {"ports": ports, "baud": DEFAULT_BAUD}, "wifi": {"host": DEFAULT_HOST}, "demo": {}}
 
     @app.get("/api/status")
     async def status():
@@ -86,10 +88,15 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
             if not req.port:
                 raise HTTPException(400, "falta el puerto")
             transport = SerialTransport(req.port, req.baud)
-        else:
+        reconnect = None
+        if req.transport == "wifi":
+            host = req.host or DEFAULT_HOST
+            transport = WebSocketTransport(host)
+            reconnect = lambda: WebSocketTransport(host)  # noqa: E731
+        elif req.transport == "demo":
             transport = DemoTransport()
         try:
-            await link.connect(transport)
+            await link.connect(transport, reconnect)
         except Exception as e:
             raise HTTPException(502, str(e) or type(e).__name__)
         return link.status()

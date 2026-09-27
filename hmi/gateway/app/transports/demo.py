@@ -107,6 +107,9 @@ class DemoTransport(Transport):
         self.params = {d["key"]: d["def"] for d in SCHEMA}
         self.tel = {"on": True, "json": False, "div": 5}
         self.estop = False
+        self.wifi = {"mode": "ap", "active": "ap", "hostname": "balancin-demo.local", "ap_ssid": "Balancin-DEMO",
+                     "ap_pass": "bal-000000", "ap_pass_default": True, "ssid": "", "pass_set": False,
+                     "ip": "192.168.4.1", "clients": 0}
         self._task: asyncio.Task | None = None
         self._on_line: LineHandler | None = None
 
@@ -194,6 +197,17 @@ class DemoTransport(Transport):
         if cmd in ("estop", "arm"):
             self.estop = cmd == "estop"
             return self._ack(mid, True)
+        if cmd == "wifi":
+            new = msg.get("set")
+            if isinstance(new, dict):
+                mode = new.get("mode", self.wifi["mode"])
+                if mode not in ("ap", "sta", "off"):
+                    return self._ack(mid, False, 'mode debe ser "ap", "sta" u "off"')
+                if mode == "sta" and not (new.get("ssid") or self.wifi["ssid"]):
+                    return self._ack(mid, False, "ssid: entre 1 y 32 caracteres")
+                self.wifi.update(mode=mode, active=mode, ssid=new.get("ssid", self.wifi["ssid"]),
+                                 pass_set=bool(new.get("pass")) or self.wifi["pass_set"])
+            return self._ack(mid, True, wifi=dict(self.wifi))
         if cmd == "tel":
             if "on" in msg:
                 self.tel["on"] = bool(msg["on"])

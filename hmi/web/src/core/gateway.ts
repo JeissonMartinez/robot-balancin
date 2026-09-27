@@ -154,8 +154,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const api = {
   info: () => request<{ version?: string; host: string; port: number; lan_urls: string[] }>('GET', '/api/info'),
-  transports: () => request<{ serial: { ports: SerialPortInfo[]; baud: number } }>('GET', '/api/transports'),
-  connect: (transport: 'serial' | 'demo', port?: string) => request<Status>('POST', '/api/connect', { transport, port }),
+  transports: () =>
+    request<{ serial: { ports: SerialPortInfo[]; baud: number }; wifi?: { host: string } }>('GET', '/api/transports'),
+  connect: (transport: 'serial' | 'wifi' | 'demo', opts: { port?: string; host?: string } = {}) =>
+    request<Status>('POST', '/api/connect', { transport, ...opts }),
   disconnect: () => request<Status>('POST', '/api/disconnect'),
   paramSets: () => request<ParamSet[]>('GET', '/api/param-sets'),
   saveParamSet: (body: { name: string; notes?: string; params?: Params; overwrite?: boolean }) =>

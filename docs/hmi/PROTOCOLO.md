@@ -1,7 +1,7 @@
 # Protocolo robot ↔ HMI (v1)
 
 Mensajes entre el firmware del balancín y el gateway de la HMI. El protocolo es el mismo sobre
-cualquier transporte; hoy se implementa por Serial y en F4 se suma WebSocket.
+cualquier transporte: Serial (USB) y WebSocket (WiFi, desde fw 0.4.0).
 
 Implementación: [`src/protocol.cpp`](../../src/protocol.cpp), parámetros en
 [`src/params.cpp`](../../src/params.cpp). Verificación con el robot conectado:
@@ -25,6 +25,27 @@ conectar, envía `{"type":"cmd","cmd":"tel","fmt":"json","div":1}`.
 Durante la prueba de zona muerta (`deadband`) cualquier byte que llegue por el Serial la aborta,
 incluido un comando JSON, que se pierde. El gateway no debe enviar nada hasta recibir el `ack`.
 
+### Transporte WebSocket (WiFi)
+
+| | |
+|---|---|
+| Dirección | `ws://<ip>/ws`. En la red propia del robot: `ws://192.168.4.1/ws`. En una red local: su IP o `ws://balancin-xxxx.local/ws` (mDNS) |
+| Trama | Un mensaje de texto WebSocket = una línea (sin `\n`). Mismos mensajes que por Serial |
+| Al conectar | El robot envía `hello` sólo a ese cliente |
+| Respuestas | El `ack` va sólo al cliente que envió el comando; telemetría y logs, a todos |
+| Telemetría | Por defecto JSON a 50 Hz. Si la cola de algún cliente está llena, la trama se descarta (se ve en `seq`) |
+| Clientes | Hasta 3 simultáneos |
+| Estado | `http://<ip>/` devuelve `{"robot":"balancin","fw","proto","ws"}` |
+
+**Canales independientes.** Serial y WebSocket son dos canales con su propia configuración de
+telemetría (`tel`): el gateway puede recibir JSON a 50 Hz por WiFi mientras el monitor serie sigue en
+texto a 10 Hz. Los logs de texto (calibración, zona muerta, WiFi) salen por los dos.
+
+Los comandos que llegan por WiFi se atienden en el mismo hilo que los del Serial (`loop()`), nunca
+en la tarea de red: una calibración no bloquea el WiFi. Durante la prueba de zona muerta, cualquier
+mensaje recibido por cualquiera de los dos canales la aborta; a diferencia del Serial, por WiFi el
+comando no se pierde y se atiende al terminar.
+
 ---
 
 ## 2. Mensajes del robot
@@ -34,7 +55,7 @@ incluido un comando JSON, que se pierde. El gateway no debe enviar nada hasta re
 Al arrancar y como respuesta a `hello`.
 
 ```json
-{"type":"hello","fw":"0.3.0","proto":1,"period_ms":20,"structure":"SpeedOuter","params_src":"nvs"}
+{"type":"hello","fw":"0.4.0","proto":1,"period_ms":20,"structure":"SpeedOuter","params_src":"nvs"}
 ```
 
 | Campo | Significado |
@@ -108,7 +129,8 @@ responden al terminar.
 | `deadband` | — | Prueba de zona muerta. Pausa el control, hasta ~20 s | — | `d` |
 | `estop` | — | Parada de emergencia: motores off y sin re-armado | — | `e` |
 | `arm` | — | Libera la parada. El control se activa al poner el robot vertical | — | `a` |
-| `tel` | `on: bool`, `fmt: "json"\|"text"`, `div: 1…50` (todos opcionales) | Configura la telemetría del Serial | `on`, `fmt`, `div`, `dropped` | `t` (on/off), `j` (JSON 50 Hz / texto 10 Hz) |
+| `tel` | `on: bool`, `fmt: "json"\|"text"`, `div: 1…50` (todos opcionales) | Configura la telemetría **del canal por el que llega** (Serial o WiFi) | `on`, `fmt`, `div`, `dropped` | `t` (on/off), `j` (JSON 50 Hz / texto 10 Hz) |
+| `wifi` | `set: {mode, ssid, pass, ap_pass}` (opcional) | Sin `set`: estado del WiFi. Con `set`: valida, guarda en NVS y aplica 0.5 s después (ver §5) | `wifi` (estado) | `w` (imprime el estado) |
 
 Ejemplos:
 
@@ -185,7 +207,39 @@ Para volver a fábrica de forma permanente: `defaults` y luego `save`.
 
 ---
 
-## 5. Versionado
+## 5. WiFi (fw ≥ 0.4.0)
+
+| Modo | Qué hace |
+|---|---|
+| `ap` (por defecto) | Red propia `Balancin-XXXX`, clave única `bal-xxxxxx` derivada del chip, IP 192.168.4.1 |
+| `sta` | Se une a la red `ssid`. Si no lo logra en 15 s levanta su red propia (`active: "ap_fallback"`) para no quedar inaccesible |
+| `off` | Radio apagada; sólo USB |
+
+Estado (`ack` de `wifi`):
+
+```json
+{"mode":"ap","active":"ap","hostname":"balancin-3fa2.local","ap_ssid":"Balancin-3FA2","ap_pass":"bal-c13fa2",
+ "ap_pass_default":true,"ssid":"","pass_set":false,"ip":"192.168.4.1","clients":1}
+```
+
+`active`: `ap`, `sta`, `sta_connecting`, `ap_fallback` u `off`. `rssi` (dBm) sólo en `sta`. La clave de la
+red local (`pass`) se guarda pero nunca se devuelve: sólo `pass_set`. `ap_pass` vacío vuelve a la
+clave del robot. Reglas: `ssid` 1–32 caracteres (obligatorio en `sta`); claves vacías o de 8–63.
+
+Ejemplos:
+
+```json
+{"type":"cmd","id":1,"cmd":"wifi"}
+{"type":"cmd","id":2,"cmd":"wifi","set":{"mode":"sta","ssid":"Laboratorio","pass":"clave-del-router"}}
+{"type":"cmd","id":3,"cmd":"wifi","set":{"mode":"ap","ap_pass":""}}
+```
+
+Cambiar el WiFi no detiene el control. Si el cambio se hace por WiFi, la conexión se corta al
+aplicarlo.
+
+---
+
+## 6. Versionado
 
 - Agregar un campo a un mensaje o un comando nuevo **no** cambia la versión: el gateway ignora lo
   que no conoce.

@@ -3,6 +3,7 @@
 #include <Wire.h>
 #include <MPU6050.h>
 #include <Preferences.h>
+#include "console.h"
 
 static MPU6050 mpu;
 static Preferences prefs;
@@ -42,7 +43,7 @@ static void saveCalibration()
   prefs.putFloat("az_off", az_offset);
   prefs.putFloat("gx_off", gx_offset);
   prefs.end();
-  Serial.println(">> Calibración guardada.");
+  Console.println(">> Calibración guardada.");
 }
 
 bool loadCalibration()

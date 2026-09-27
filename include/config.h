@@ -25,9 +25,15 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.3.0"
+#define FW_VERSION "0.4.0"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
+
+// ===================== WIFI (wifi_link.h) ======================
+// Por defecto el robot crea su red "Balancin-XXXX" (clave "bal-xxxxxx", única por chip).
+// Modo, red y claves se cambian desde la HMI o con el comando "wifi" y quedan en NVS.
+const uint32_t WIFI_STA_TIMEOUT_MS = 15000;  // sin conectar a la red local → levanta su AP
+const uint8_t WIFI_MAX_WS_CLIENTS = 3;       // clientes WebSocket simultáneos
 
 // ===================== BOTÓN ==================================
 #define BTN_CAL 10
