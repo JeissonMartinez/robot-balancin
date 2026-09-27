@@ -23,9 +23,14 @@ String topicIn, topicOut, topicStatus, uri;
 // Mensajes recibidos (line) o aviso de conexión (line == nullptr), atendidos en loop()
 QueueHandle_t rxQueue = nullptr;
 const size_t MAX_LINE = 1023;
-const int OUTBOX_LIMIT = 16 * 1024; // bytes pendientes: por encima se descarta telemetría
-
-/** Junta una línea y la publica en .../out como un mensaje (cola de esp-mqtt, no bloquea). */
+/**
+ * Junta una línea y la publica en .../out como un mensaje.
+ *
+ * Se publica directo (esp_mqtt_client_publish, QoS 0) y no con esp_mqtt_client_enqueue:
+ * en el ESP-IDF 4.4 la tarea de MQTT saca de su cola un mensaje por vuelta y cada vuelta
+ * espera hasta 1 s datos del broker, así que la telemetría salía a 1 Hz. Publicar directo
+ * escribe en el socket desde loop(); network_timeout_ms acota lo que puede demorar.
+ */
 class MqttPrint : public Print
 {
 public:
@@ -51,10 +56,12 @@ public:
   {
     if (!line.length())
       return;
-    if (client && connected)
-      esp_mqtt_client_enqueue(client, topicOut.c_str(), line.c_str(), line.length(), 0, 0, true);
+    if (client && connected && esp_mqtt_client_publish(client, topicOut.c_str(), line.c_str(), line.length(), 0, 0) < 0)
+      dropped++;
     line = "";
   }
+
+  uint32_t dropped = 0;
 
 private:
   String line;
@@ -148,6 +155,7 @@ void start()
   c.keepalive = 10;
   c.buffer_size = 2048;     // recepción (comandos)
   c.out_buffer_size = 6144; // envío: la respuesta a "schema" ocupa ~3.5 kB
+  c.network_timeout_ms = 300; // máximo que un envío puede demorar loop() si el broker no responde
   client = esp_mqtt_client_init(&c);
   if (!client)
   {
@@ -225,7 +233,7 @@ Channel &mqttChannel()
 
 bool mqttCanSend()
 {
-  return client && connected && esp_mqtt_client_get_outbox_size(client) < OUTBOX_LIMIT;
+  return client && connected;
 }
 
 void mqttStatusJson(JsonObject o)
@@ -235,6 +243,7 @@ void mqttStatusJson(JsonObject o)
   o["port"] = cfg.port;
   o["connected"] = (bool)connected;
   o["topic"] = String("balancin/") + wifiHostname();
+  o["dropped"] = out.dropped;
 }
 
 bool mqttConfigure(JsonObjectConst in, String &err)

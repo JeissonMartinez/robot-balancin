@@ -225,14 +225,18 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 ### Medición de enlaces (F5)
 
 `hmi/tools/link_bench.py`, mismo robot, 100 comandos y 20 s de telemetría a 50 Hz. Pendiente de
-completar con el robot.
+completar con el robot (2026-09-26: USB, WebSocket en red local y MQTT con fw 0.5.0).
 
 | Enlace | Ida y vuelta p50 / p95 [ms] | Telemetría [Hz] | Perdidas | Jitter de llegada p95 / máx [ms] |
 |---|---|---|---|---|
-| USB (Serial 921600) | | | | |
+| USB (Serial 921600) | 7.0 / 7.6 | 50.0 | 0.00 % | 3.1 / 8.3 |
 | WiFi WebSocket (red propia) | | | | |
-| WiFi WebSocket (red local) | | | | |
-| MQTT (red local, broker en el PC) | | | | |
+| WiFi WebSocket (red local, −56 dBm) | 23.8 / 41.9 | 49.7 | 0.00 % | 21.0 / 132.1 |
+| MQTT (red local, broker en el PC), fw 0.5.0 | 1025.2 / 1081.1 | 1.0 | 0.00 % | 1029.3 / 1064.5 |
+| MQTT (red local, broker en el PC), fw 0.5.1 | | | | |
+
+La fila de fw 0.5.0 no es MQTT sino un error del firmware: publicaba con `esp_mqtt_client_enqueue`,
+que en el ESP-IDF 4.4 saca un mensaje por segundo. Corregido en 0.5.1 (publicación directa).
 
 ---
 

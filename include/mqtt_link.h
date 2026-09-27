@@ -9,7 +9,8 @@
  * <robot> es el nombre de red del robot (wifiHostname(), p. ej. "balancin-b884").
  *
  * Cada mensaje es una línea del protocolo, como por Serial o WebSocket. La telemetría de
- * este canal arranca apagada; el gateway la activa con "tel" al conectarse. "hello" se
+ * este canal arranca apagada; el gateway la activa con "tel" al conectarse. Se publica
+ * directo desde loop() (QoS 0), con un tope de 300 ms por envío. "hello" se
  * publica sólo en la primera conexión tras encender: así el gateway reconoce un reinicio
  * real y no lo confunde con una reconexión al broker.
  *
@@ -31,7 +32,7 @@ void mqttLoop();
 /** Canal del protocolo por MQTT. */
 Channel &mqttChannel();
 
-/** @return true si está conectado al broker y la cola de salida tiene lugar. */
+/** @return true si está conectado al broker. */
 bool mqttCanSend();
 
 /** Estado: enabled, host, port, connected, topic. */

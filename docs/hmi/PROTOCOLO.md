@@ -62,7 +62,8 @@ Con un broker (Mosquitto) en la red. El robot publica y se suscribe con su nombr
   la apaga al desconectarse.
 - `hello` se publica sólo en la **primera** conexión al broker tras encender, para que el gateway
   distinga un reinicio real de una reconexión.
-- Si la cola de salida supera 16 kB (broker lento), se descarta telemetría (se ve en `seq`).
+- Se publica directo desde el hilo principal con un tope de 300 ms por envío; un envío fallido se
+  descarta (se ve en `seq` y en `dropped` del estado).
 - Se configura con el comando `mqtt` (§5b).
 
 ---
@@ -74,7 +75,7 @@ Con un broker (Mosquitto) en la red. El robot publica y se suscribe con su nombr
 Al arrancar y como respuesta a `hello`.
 
 ```json
-{"type":"hello","fw":"0.5.0","proto":1,"period_ms":20,"structure":"SpeedOuter","params_src":"nvs"}
+{"type":"hello","fw":"0.5.1","proto":1,"period_ms":20,"structure":"SpeedOuter","params_src":"nvs"}
 ```
 
 | Campo | Significado |
