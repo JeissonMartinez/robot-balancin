@@ -6,14 +6,15 @@ WebSocket (/ws): tiempo real con la HMI. Mensajes en docs/hmi/GATEWAY.md.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -39,6 +40,15 @@ class ConnectRequest(BaseModel):
     mqtt_port: int = MQTT_PORT
 
 
+COOKIE = "balancin_clave"
+COOKIE_MAX_AGE = 30 * 24 * 3600  # un equipo recuerda la clave 30 días
+OPEN_PATHS = {"/api/health", "/api/auth", "/api/info"}
+
+
+class AuthRequest(BaseModel):
+    clave: str
+
+
 class SessionPatch(BaseModel):
     notes: str | None = None
 
@@ -51,7 +61,13 @@ class ParamSetRequest(BaseModel):
     overwrite: bool = False
 
 
-def create_app(db_path=None, web_dist=None) -> FastAPI:
+def create_app(db_path=None, web_dist=None, clave: str | None = None) -> FastAPI:
+    """`clave`: None = la de settings (argumento --clave o BALANCIN_CLAVE); "" = sin clave."""
+    secret = settings.clave if clave is None else clave
+
+    def authorized(value: str | None) -> bool:
+        return not secret or (value is not None and hmac.compare_digest(value.encode(), secret.encode()))
+
     db = Database(db_path or settings.db_path)
     hub = Hub()
     link = RobotLink(db, hub)
@@ -67,6 +83,36 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
     # La HMI comprimida (~30 kB en vez de ~80 kB) carga más rápido en redes lentas, como la
     # red propia del robot, donde el ESP32 reenvía todo entre equipos
     app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+    # Con clave: toda la API la exige (cookie de /api/auth o cabecera Authorization: Bearer).
+    # La página y sus archivos se sirven igual, para poder mostrar el formulario de la clave.
+    @app.middleware("http")
+    async def require_key(request: Request, call_next):
+        path = request.url.path
+        if secret and path.startswith("/api/") and path not in OPEN_PATHS:
+            bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip() or None
+            if not (authorized(request.cookies.get(COOKIE)) or authorized(bearer)):
+                return JSONResponse({"detail": "clave requerida"}, status_code=401)
+        return await call_next(request)
+
+    @app.get("/api/auth")
+    async def auth_status(request: Request):
+        return {"required": bool(secret), "ok": authorized(request.cookies.get(COOKIE))}
+
+    @app.post("/api/auth")
+    async def login(body: AuthRequest, response: Response):
+        if not secret:
+            return {"ok": True}
+        if not authorized(body.clave):
+            await asyncio.sleep(0.8)  # frena los intentos por fuerza bruta
+            raise HTTPException(401, "clave incorrecta")
+        response.set_cookie(COOKIE, secret, max_age=COOKIE_MAX_AGE, httponly=True, samesite="lax", path="/")
+        return {"ok": True}
+
+    @app.delete("/api/auth")
+    async def logout(response: Response):
+        response.delete_cookie(COOKIE, path="/")
+        return {"ok": True}
     app.state.db = db
 
     @app.get("/api/health")
@@ -240,6 +286,9 @@ def create_app(db_path=None, web_dist=None) -> FastAPI:
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
+        if not (authorized(ws.cookies.get(COOKIE)) or authorized(ws.query_params.get("clave"))):
+            await ws.close(code=4401)
+            return
         await ws.accept()
         hub.add(ws)
         await ws.send_text(json.dumps(link.snapshot(), ensure_ascii=False))

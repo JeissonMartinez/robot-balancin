@@ -14,7 +14,8 @@ robot ──USB 921600 ─────┐
 | `gateway/` | Enlace con el robot, API y base de datos | [GATEWAY.md](../docs/hmi/GATEWAY.md) |
 | `web/` | Interfaz (TypeScript + Vite, sin framework) | este archivo |
 | `tools/` | `protocol_check.py` (verificación del protocolo, por USB o `--ws`), `link_bench.py` (medición de enlaces) | [PROTOCOLO.md](../docs/hmi/PROTOCOLO.md) |
-| `docker-compose.yml`, `mosquitto/` | Broker MQTT opcional (F5) | este archivo |
+| `iniciar.sh` | Arranque en un comando (instala, compila, arranca) | este archivo |
+| `Dockerfile`, `docker-compose.yml`, `mosquitto/` | Imagen del laboratorio (gateway + HMI) y broker MQTT | este archivo |
 
 ## Requisitos
 
@@ -35,9 +36,20 @@ npm run build
 
 ## Usar
 
+Un solo comando (la primera vez instala y compila lo necesario; después sólo arranca):
+
+```bash
+hmi/iniciar.sh                    # HMI accesible desde la red (PC, tablet, celular)
+hmi/iniciar.sh --clave una-clave  # con clave de acceso
+hmi/iniciar.sh --mqtt             # y además el broker MQTT (Mosquitto)
+hmi/iniciar.sh --solo-este-pc     # sólo en este equipo
+```
+
+Equivale a lo manual:
+
 ```bash
 cd hmi/gateway
-.venv/bin/python -m app
+.venv/bin/python -m app [--host 0.0.0.0] [--clave X]
 ```
 
 Abrir <http://127.0.0.1:8000>, elegir el transporte y **Conectar**:
@@ -94,6 +106,11 @@ Verificar el protocolo por WiFi: `hmi/gateway/.venv/bin/python hmi/tools/protoco
 - Las advertencias `Invalid HTTP request received` en el log son intentos de Safari de abrir la
   página por HTTPS; no afectan.
 - **Parada de emergencia**: botón rojo o tecla `Esc` (en el PC).
+- **Clave de acceso** (opcional): con `--clave` la HMI la pide una vez por equipo (se recuerda 30
+  días; **Salir**, al pie, la olvida). Sin clave, cualquiera en la red puede mover el robot.
+- **Celular**: barra de Seguridad fija arriba y cuatro pestañas abajo (En vivo, Historial, Ajustes,
+  Conexión). Se puede **agregar a la pantalla de inicio** (Safari: Compartir → Agregar a inicio;
+  Chrome: menú → Instalar app) y se abre como una app, sin la barra del navegador.
 - **Parámetros**: con **En vivo** cada cambio se envía al soltar el slider o confirmar el número
   (Enter). Sin **En vivo** los cambios se acumulan (borde dorado) y se envían juntos con
   **Aplicar**, útil para mover `kp_min` y `kp_max` a la vez. ↺ vuelve al valor de fábrica de ese
@@ -129,10 +146,27 @@ hmi/gateway/.venv/bin/python hmi/tools/link_bench.py --mqtt 192.168.1.7 --robot 
 
 Ida y vuelta de un comando (p50/p95), telemetría recibida, tramas perdidas y jitter de llegada.
 
+## Equipo siempre encendido (Docker)
+
+`hmi/Dockerfile` compila la HMI y la empaqueta con el gateway; `hmi/docker-compose.yml` levanta el
+gateway (puerto 8000) y el broker MQTT (1883). Para un Linux del laboratorio o un servidor:
+
+```bash
+cd hmi
+echo "BALANCIN_CLAVE=una-clave" > .env   # opcional
+docker compose up -d
+```
+
+- La base de datos queda en el volumen `gateway-data` (sobrevive a reinicios y actualizaciones).
+- Robot por **WiFi** (su IP en la red local) o **MQTT** (broker `mosquitto` desde la HMI).
+- USB sólo en Linux, descomentando `devices:` en el compose. Docker Desktop (macOS/Windows) no da
+  acceso a puertos USB: en el Mac usar `iniciar.sh`.
+
 ## Actualizar
 
-Tras `git pull` (o cualquier cambio en `hmi/`): `npm run build` en `hmi/web` y **reiniciar el
-gateway**. El gateway sirve la HMI desde el disco, así que una página nueva con un gateway viejo
+Tras `git pull` (o cualquier cambio en `hmi/`): **reiniciar `hmi/iniciar.sh`** (recompila la HMI si
+cambió). A mano: `npm run build` en `hmi/web` y reiniciar el gateway. Con Docker:
+`docker compose up -d --build`. El gateway sirve la HMI desde el disco, así que una página nueva con un gateway viejo
 falla en las funciones nuevas; la HMI lo avisa en el registro («El gateway es v… y la HMI v…»).
 Las versiones están en `hmi/gateway/app/__init__.py` y `HMI_VERSION` en `hmi/web/src/main.ts`, y se
 suben juntas.
@@ -183,7 +217,7 @@ Probados: escritorio (1440 × 860), iPad mini horizontal (1133 × 690) y vertica
 |---|---|
 | > 1080 px | La página ocupa el alto de la pantalla y no se desplaza. Izquierda (monitoreo): cifras y la vista con pestañas **En vivo** (escena + trazas lado a lado) e **Historial**. Derecha (control): **Seguridad fija arriba** y debajo conexión, parámetros, juegos, comandos y registro con su propio desplazamiento |
 | 701–1080 px | Monitoreo arriba (~60 % del alto) y control abajo, cada uno con su desplazamiento; seguridad a todo el ancho y las demás tarjetas en dos columnas |
-| ≤ 700 px | Una columna con desplazamiento normal: seguridad, conexión, cifras, vista, parámetros, juegos, comandos, registro |
+| ≤ 700 px | Seguridad fija arriba y pestañas abajo: **En vivo** (cifras, escena, trazas), **Historial**, **Ajustes** (WiFi, parámetros, juegos, comandos), **Conexión** (conexión, registro) |
 
 En pantallas bajas (≤ 820 px de alto) el encabezado oculta la descripción para dar alto a la vista.
 En pantallas táctiles los controles miden al menos ~40 px de alto.

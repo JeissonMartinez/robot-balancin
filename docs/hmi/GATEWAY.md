@@ -4,8 +4,14 @@ El gateway (`hmi/gateway`, Python + FastAPI) es el único proceso que habla con 
 web, y cualquier otro cliente (un notebook, un script de análisis), usa esta API. El protocolo
 robot ↔ gateway está en [PROTOCOLO.md](PROTOCOLO.md).
 
-Base: `http://<host>:8000`. Sin autenticación todavía (ver PLAN §8): por defecto sólo escucha en
-`127.0.0.1`.
+Base: `http://<host>:8000`. Por defecto sólo escucha en `127.0.0.1`.
+
+**Clave de acceso (opcional).** Si el gateway arranca con `--clave X` (o `BALANCIN_CLAVE=X`), toda
+la API y el WebSocket la exigen, salvo `/api/health`, `/api/info` y `/api/auth`. La HMI la pide una
+vez: `POST /api/auth {"clave": "X"}` deja una cookie (`balancin_clave`, HttpOnly, 30 días). Otros
+clientes pueden usar la cabecera `Authorization: Bearer X`. Sin clave: `401 {"detail": "clave
+requerida"}`; el WebSocket se cierra con código 4401. Es una sola clave para todos (sin usuarios ni
+roles: previstos para el despliegue en servidor).
 
 ---
 
@@ -14,6 +20,9 @@ Base: `http://<host>:8000`. Sin autenticación todavía (ver PLAN §8): por defe
 | Método y ruta | Cuerpo / parámetros | Respuesta |
 |---|---|---|
 | `GET /api/health` | — | `{"ok": true}` |
+| `GET /api/auth` | — | `{"required", "ok"}`: si hay clave y si este cliente ya la dio |
+| `POST /api/auth` | `{"clave": "..."}` | Deja la cookie de acceso; `401` si es incorrecta |
+| `DELETE /api/auth` | — | Borra la cookie (salir) |
 | `GET /api/transports` | — | Puertos serie disponibles (`usb: true` primero) y velocidad |
 | `GET /api/status` | — | Estado del enlace (ver §3) |
 | `POST /api/connect` | `{"transport": "serial", "port": "/dev/cu...", "baud": 921600}`, `{"transport": "wifi", "host": "192.168.4.1"}` (IP, nombre `.local` o `ws://…`) `{"transport": "mqtt", "host": "<broker>", "mqtt_port": 1883, "robot": "balancin-xxxx"}` o `{"transport": "demo"}` | Estado; `502` con `detail` si falla. Por WiFi, si la conexión se pierde después, el gateway reintenta cada 2 s (`retrying: true`) hasta recuperarla o hasta `disconnect` |

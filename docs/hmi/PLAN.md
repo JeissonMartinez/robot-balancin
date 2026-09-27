@@ -7,7 +7,8 @@ cada fase.
 Estado (2026-09-26):
 - **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
 - **F4 cerrada y validada en el robot**: WiFi en red local con PC y tablet a la vez; en red propia, bien con una sola pantalla.
-- **F5 implementada** (fw 0.5.0): canal MQTT opcional en el firmware (esp-mqtt, apagado por defecto), transporte MQTT y búsqueda de robots en el gateway, opción MQTT en la HMI, Mosquitto en Docker o nativo, y `link_bench.py` para medir. Pruebas con Mosquitto local y robot simulado. Falta medir con el robot y decidir (tabla abajo).
+- **F6 implementada**: celular con pestañas abajo y Seguridad fija; instalable como app; clave de acceso opcional; `hmi/iniciar.sh` (un comando); imagen Docker (gateway + HMI) con Mosquitto en compose. Probado en navegador (celular 375 px) y con pruebas del gateway; la imagen Docker no se construyó aún (Docker no estaba corriendo). Falta la prueba con el robot desde el celular.
+- **F5 cerrada**: MQTT se mantiene como opción (apagado por defecto); fw 0.5.2 publica desde una tarea propia. Pendiente confirmar con una sesión larga que ya no se corta.
 - **F3 cerrada y validada en el robot**: escena 2D/3D en vivo, historial con reproducción, tabla, eventos y CSV, desde PC, iPad y celular.
 - **F2 cerrada y validada en el robot** (parámetros en vivo y por lotes, validación, juegos, exportar, calibración y zona muerta).
 - **F1 cerrada y validada en el robot**: fw 0.3.0 por USB, 50.1 Hz, 0 tramas perdidas, parámetros leídos de NVS, sesión en SQLite, marcas de eventos en las trazas; acceso por la red local (`--host 0.0.0.0`) confirmado con PC, iPad y celular a la vez.
@@ -61,6 +62,8 @@ Los tres primeros se tomaron con estas alternativas a la vista. Si se revisa uno
 | 2026-09-26 | WebSocket con `esp32async/ESPAsyncWebServer` (tarea de red en el núcleo 0); los comandos se encolan y se atienden en `loop()`. Serial y WiFi son canales con telemetría independiente. |
 | 2026-09-26 | El gateway reintenta solo las conexiones WiFi perdidas (cada 2 s). |
 | 2026-09-26 | Corrección fw 0.4.0: el servidor web se arranca después de encender la radio (antes abortaba en el arranque: lwIP aún no existía). |
+| 2026-09-26 | F5: MQTT se mantiene como opción (apagado por defecto). En el aula, WiFi directo (mismo rendimiento, sin broker). |
+| 2026-09-26 | F6: celular con pestañas abajo; clave de acceso opcional única (usuarios y roles, en la fase de servidor); despliegue en equipo Linux con Docker. La ESP32-P4 no sirve de gateway (sin Linux: no corre Python, SQLite ni Docker). |
 | 2026-09-26 | Evaluado y descartado por ahora: HMI servida por el propio robot para usarlo sólo con tablet (sin PC). Se sigue con el plan original. Con varias pantallas, robot en red local con router (la red propia del ESP32 no da abasto para reenviar tráfico entre equipos). |
 
 ---
@@ -219,8 +222,8 @@ Cada fase termina con commit, actualización de este documento y, si cambia el u
 | **F2** ✅ | Panel de parámetros (slider + número); juegos de parámetros; panel de comandos. | Se carga un juego guardado al robot y se verifica con `get`. |
 | **F3** ✅ | Escena 2D / 3D con datos reales; tabla de historial con filtros y exportación a CSV. | Se reproduce una sesión guardada en la escena y las trazas. |
 | **F4** ✅ | WiFi en firmware (AP y STA, elegible) con WebSocket; transporte WS en el gateway. | Misma prueba de F1 sin cable, con el robot equilibrando; control sin pérdida de período (`dt` estable). |
-| **F5** ✅ código · ⏳ medición | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
-| **F6** | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |
+| **F5** ✅ | Adaptador MQTT y `docker-compose` con Mosquitto; medición de latencia WS vs MQTT. | Tabla de latencia y pérdida de tramas en este documento; decisión de mantenerlo o no. |
+| **F6** ✅ código · ⏳ robot | Pulido de UX móvil; build de producción; imagen Docker del gateway. | La HMI se usa completa desde un celular. |
 
 ### Medición de enlaces (F5)
 

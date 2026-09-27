@@ -7,6 +7,12 @@
 <title>Laboratorio del balancín</title>
 <link rel="icon" href="/logos/mecatronica.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<!-- Se puede agregar a la pantalla de inicio y abrir como app, sin la barra del navegador -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Balancín">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Questrial&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -113,6 +119,14 @@
     </div>
   </aside>
 </main>
+
+<!-- Celular: navegación inferior (oculta en pantallas mayores) -->
+<nav class="mnav" id="mnav" aria-label="Secciones">
+  <button type="button" data-m="vivo"><span class="ic" aria-hidden="true">◉</span>En vivo</button>
+  <button type="button" data-m="hist"><span class="ic" aria-hidden="true">☰</span>Historial</button>
+  <button type="button" data-m="ajustes"><span class="ic" aria-hidden="true">⚙</span>Ajustes</button>
+  <button type="button" data-m="con"><span class="ic" aria-hidden="true">⇄</span>Conexión</button>
+</nav>
 
 <script type="module" src="/src/main.ts"></script>
 </body>

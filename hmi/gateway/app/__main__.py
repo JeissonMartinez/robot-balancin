@@ -12,10 +12,13 @@ def main():
     ap.add_argument("--host", default=settings.host,
                     help="127.0.0.1 = sólo este PC; 0.0.0.0 = también otros equipos de la red (celular)")
     ap.add_argument("--port", type=int, default=settings.port)
+    ap.add_argument("--clave", default=settings.clave,
+                    help="clave de acceso a la HMI (también BALANCIN_CLAVE); sin clave, abierto")
     args = ap.parse_args()
-    settings.host, settings.port = args.host, args.port
+    settings.host, settings.port, settings.clave = args.host, args.port, args.clave
 
     print(f"\n  HMI en este PC:   http://127.0.0.1:{args.port}")
+    print(f"  Acceso:           {'con clave' if args.clave else 'abierto (sin clave)'}")
     if args.host in ("0.0.0.0", "::"):
         for ip in lan_addresses():
             print(f"  HMI en la red:    http://{ip}:{args.port}   (celular en la misma WiFi)")

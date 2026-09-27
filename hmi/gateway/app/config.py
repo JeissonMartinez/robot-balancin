@@ -17,6 +17,8 @@ class Settings:
     db_path: Path = Path(os.environ.get("BALANCIN_DB", GATEWAY_DIR / "data" / "balancin.db"))
     # Build de la HMI (npm run build en hmi/web). Si existe, el gateway la sirve en "/".
     web_dist: Path = Path(os.environ.get("BALANCIN_WEB_DIST", GATEWAY_DIR.parent / "web" / "dist"))
+    # Clave de acceso opcional: si se define, la HMI la pide una vez por equipo. Vacía = abierto.
+    clave: str = os.environ.get("BALANCIN_CLAVE", "")
 
 
 settings = Settings()

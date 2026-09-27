@@ -163,3 +163,27 @@ def test_static_is_compressed(tmp_path):
     with TestClient(create_app(db_path=tmp_path / "t.db", web_dist=dist)) as c:
         r = c.get("/", headers={"accept-encoding": "gzip"})
         assert r.status_code == 200 and r.headers.get("content-encoding") == "gzip"
+
+
+def test_access_key(tmp_path):
+    from starlette.websockets import WebSocketDisconnect as WSD
+
+    with TestClient(create_app(db_path=tmp_path / "t.db", web_dist=tmp_path / "x", clave="secreta")) as c:
+        assert c.get("/api/health").status_code == 200
+        assert c.get("/api/auth").json() == {"required": True, "ok": False}
+        assert c.get("/api/sessions").status_code == 401
+        with pytest.raises(WSD):
+            with c.websocket_connect("/ws") as ws:
+                ws.receive_json()
+        assert c.post("/api/auth", json={"clave": "otra"}).status_code == 401
+        assert c.post("/api/auth", json={"clave": "secreta"}).status_code == 200
+        # la cookie queda en el cliente
+        assert c.get("/api/auth").json()["ok"] is True
+        assert c.get("/api/sessions").status_code == 200
+        with c.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["type"] == "snapshot"
+        assert c.get("/api/sessions", headers={"authorization": "Bearer secreta"}, cookies={}).status_code == 200
+
+
+def test_no_key_is_open(client):
+    assert client.get("/api/auth").json() == {"required": False, "ok": True}

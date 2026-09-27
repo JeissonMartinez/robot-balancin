@@ -65,16 +65,56 @@ main{
   .tile .val{font-size:18px}
 }
 
+/* Celular: Seguridad fija arriba (compacta) y cuatro pestañas abajo. Cada pestaña muestra
+   sólo sus tarjetas, así casi no hay que desplazarse:
+     En vivo: cifras + escena + trazas · Historial · Ajustes: parámetros, juegos, WiFi,
+     comandos · Conexión: conexión + registro */
+.mnav{display:none}
 @media (max-width:700px){
-  main{grid-template-columns:minmax(0,1fr); gap:12px}
+  main{grid-template-columns:minmax(0,1fr); gap:10px; display:flex; flex-direction:column; align-items:stretch;
+       padding-bottom:calc(72px + env(safe-area-inset-bottom))}
   .col, .side-scroll{display:contents}
   #cardSeguridad{order:1} #cardConexion{order:2} .tiles{order:3} #cardVista{order:4} #cardWifi{order:5}
   #cardParametros{order:6} #cardJuegos{order:7} #cardComandos{order:8} #cardRegistro{order:9} .pie{order:10}
-  main{display:flex; flex-direction:column}
+
+  #cardSeguridad{position:sticky; top:0; z-index:20; border-radius:0 0 var(--r) var(--r); margin:0 -10px}
+  #cardSeguridad .card-head, #cardSeguridad .safety-note{display:none}
+  #cardSeguridad .card-body{padding:8px 10px}
+  #cardSeguridad .btn.estop, #cardSeguridad .btn.arm{min-height:44px}
+
+  body[data-m] .tiles, body[data-m] #cardVista, body[data-m] .side-scroll > *{display:none}
+  body[data-m="vivo"] .tiles, body[data-m="vivo"] #cardVista,
+  body[data-m="hist"] #cardVista,
+  body[data-m="ajustes"] #cardParametros, body[data-m="ajustes"] #cardJuegos,
+  body[data-m="ajustes"] #cardWifi, body[data-m="ajustes"] #cardComandos,
+  body[data-m="con"] #cardConexion, body[data-m="con"] #cardRegistro, body[data-m="con"] .pie{display:block}
+  body[data-m="vivo"] .tiles{display:grid}
+  .tiles{grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px}
+  .tile{padding:7px 8px 8px}
+  .tile .lbl{font-size:9px; letter-spacing:.1em}
+  .tile .val{font-size:17px}
+  .tile .foot{font-size:10px}
+  /* Las pestañas En vivo / Historial de la tarjeta las reemplaza la barra inferior */
+  #cardVista .tabs{display:none}
+
   .panel-vivo{display:flex; flex-direction:column; gap:8px; padding:8px 4px}
-  .panel-vivo .escena-host{height:280px}
+  .panel-vivo .escena-host{height:260px}
   .vivo-ctl .hint{display:none}
   .vivo-ctl .seg button{padding:5px 8px}
+  .log{max-height:none}
+
+  .mnav{
+    display:grid; grid-template-columns:repeat(4,1fr); position:fixed; left:0; right:0; bottom:0; z-index:30;
+    background:var(--surface); border-top:1px solid var(--line);
+    padding:4px 4px calc(4px + env(safe-area-inset-bottom));
+    box-shadow:0 -6px 20px -14px rgba(0,0,0,.4);
+  }
+  .mnav button{
+    border:0; background:none; display:flex; flex-direction:column; align-items:center; gap:1px;
+    font-size:11px; color:var(--ink-3); padding:6px 0; min-height:52px; cursor:pointer; border-radius:8px;
+  }
+  .mnav .ic{font-size:18px; line-height:1.2}
+  .mnav button[aria-current="page"]{color:var(--azul); background:color-mix(in srgb,var(--azul) 10%,transparent)}
 }
 
 /* ===================== vista: pestañas, escena ===================== */
@@ -312,6 +352,15 @@ details.grupo > summary .n{margin-left:auto; text-transform:none; letter-spacing
 /* ===================== comandos ===================== */
 .cmd-btns{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px}
 .cmd-out{font-size:11.5px; white-space:pre-wrap; background:var(--surface-2); border-radius:7px; padding:8px 10px; color:var(--ink-2)}
+
+/* ===================== clave de acceso ===================== */
+.login{position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding:16px;
+       background:color-mix(in srgb,var(--ground) 92%,transparent); backdrop-filter:blur(4px)}
+.login-card{width:min(340px,100%); padding:22px; display:flex; flex-direction:column; gap:10px; text-align:center}
+.login-logo{width:56px; height:56px; margin:0 auto; background:#fff; border-radius:10px; padding:4px}
+.login-card h2{font-size:18px}
+.login-card p{margin:0; font-size:12.5px}
+.login-card input{min-height:40px; text-align:center}
 
 /* ===================== diálogo ===================== */
 dialog.dlg{

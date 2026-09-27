@@ -272,5 +272,5 @@ Laboratorio web para monitorear, sintonizar y registrar el robot desde el PC o e
 Hoy: conexión por USB o WiFi (o robot simulado); escena 2D/3D y trazas a 50 Hz con marcas de eventos; parámetros en vivo y juegos de parámetros; comandos; parada de emergencia; historial de cada sesión en SQLite con reproducción, tabla y CSV. Desde PC, tablet o celular. Instalación y uso en [hmi/README.md](hmi/README.md).
 
 ```bash
-cd hmi/gateway && .venv/bin/python -m app   # y abrir http://127.0.0.1:8000
+hmi/iniciar.sh        # y abrir http://127.0.0.1:8000 (o desde el celular la dirección que imprime)
 ```

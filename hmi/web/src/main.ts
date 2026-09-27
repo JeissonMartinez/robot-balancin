@@ -19,6 +19,7 @@ import { setupParamSets } from './ui/paramsets';
 import { setupTheme } from './ui/theme';
 import { setupTiles } from './ui/tiles';
 import { setupWifi } from './ui/wifi';
+import { ensureAccess } from './ui/login';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -80,6 +81,33 @@ function setTab(t: string) {
   }
 }
 tabBtns.forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab!)));
+
+// ------------------------------------------------------------ celular: pestañas abajo
+// En pantallas angostas cada pestaña muestra sólo sus tarjetas (ver layout.css). "En vivo" e
+// "Historial" usan la misma tarjeta de la vista, así que también cambian su pestaña interna.
+const phone = matchMedia('(max-width:700px)');
+const mnavBtns = [...document.querySelectorAll<HTMLButtonElement>('#mnav button')];
+function setMobileTab(m: string) {
+  document.body.dataset.m = m;
+  mnavBtns.forEach((b) => (b.dataset.m === m ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
+  if (m === 'vivo') setTab('vivo');
+  if (m === 'hist') setTab('historial');
+  window.scrollTo({ top: 0 });
+}
+mnavBtns.forEach((b) => b.addEventListener('click', () => setMobileTab(b.dataset.m!)));
+function applyPhone() {
+  if (phone.matches) setMobileTab(gw.status?.state === 'connected' ? 'vivo' : 'con');
+  else delete document.body.dataset.m;
+}
+phone.addEventListener('change', applyPhone);
+applyPhone();
+// Al conectarse, del panel de conexión se pasa a ver el robot
+let wasConnected = false;
+gw.on('status', (s) => {
+  const now = s.state === 'connected';
+  if (phone.matches && now && !wasConnected && document.body.dataset.m === 'con') setMobileTab('vivo');
+  wasConnected = now;
+});
 setTab((() => {
   try {
     return localStorage.getItem('vista') === 'historial' ? 'historial' : 'vivo';
@@ -160,4 +188,18 @@ gw.on('link', async (up) => {
   }
 });
 
-gw.start();
+// Con clave configurada en el gateway, se pide antes de conectar
+ensureAccess().then(({ required }) => {
+  if (required) {
+    const salir = document.createElement('button');
+    salir.className = 'btn small';
+    salir.textContent = 'Salir';
+    salir.title = 'Olvidar la clave en este equipo';
+    salir.addEventListener('click', async () => {
+      await api.logout();
+      location.reload();
+    });
+    document.querySelector('.pie')?.append(' · ', salir);
+  }
+  gw.start();
+});

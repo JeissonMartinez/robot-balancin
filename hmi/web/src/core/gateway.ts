@@ -54,8 +54,9 @@ export class Gateway {
       this.emit('link', true);
     };
     ws.onmessage = (e) => this.handle(JSON.parse(e.data) as ServerMsg);
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       if (this.ws !== ws) return;
+      if (e.code === 4401 || e.code === 1008) return location.reload(); // sin clave válida
       this.linkUp = false;
       this.emit('link', false);
       for (const [, p] of this.pending) {
@@ -148,11 +149,16 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
+  // Clave vencida o cambiada: recargar muestra el formulario de acceso
+  if (r.status === 401 && path !== '/api/auth') location.reload();
   if (!r.ok) throw new ApiError((data as { detail?: string }).detail ?? `${r.status} ${r.statusText}`, r.status);
   return data as T;
 }
 
 export const api = {
+  auth: () => request<{ required: boolean; ok: boolean }>('GET', '/api/auth'),
+  login: (clave: string) => request<{ ok: boolean }>('POST', '/api/auth', { clave }),
+  logout: () => request<{ ok: boolean }>('DELETE', '/api/auth'),
   info: () => request<{ version?: string; host: string; port: number; lan_urls: string[] }>('GET', '/api/info'),
   transports: () =>
     request<{ serial: { ports: SerialPortInfo[]; baud: number }; wifi?: { host: string } }>('GET', '/api/transports'),

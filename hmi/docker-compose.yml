@@ -1,7 +1,30 @@
-# Servicios opcionales de la HMI.
-#   docker compose up -d mosquitto     # broker MQTT en el puerto 1883
-# Sin Docker (macOS con Homebrew):  mosquitto -c hmi/mosquitto/mosquitto-local.conf
+# Laboratorio en un equipo siempre encendido (Linux / Raspberry Pi) o servidor.
+#
+#   cd hmi
+#   echo "BALANCIN_CLAVE=una-clave" > .env     # opcional: clave de acceso a la HMI
+#   docker compose up -d                       # gateway en :8000 y broker MQTT en :1883
+#   docker compose up -d mosquitto             # sólo el broker (p. ej. gateway en el Mac)
+#
+# La base de datos queda en el volumen gateway-data. Desde la HMI, conectar por WiFi (IP del
+# robot) o por MQTT con broker "mosquitto" (nombre del servicio dentro de esta red).
 services:
+  gateway:
+    build: .
+    image: balancin-hmi:latest
+    container_name: balancin-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - BALANCIN_CLAVE=${BALANCIN_CLAVE:-}
+    volumes:
+      - gateway-data:/data
+    # USB en Linux: descomentar y ajustar el puerto del robot
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
+
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: balancin-mosquitto
@@ -13,4 +36,5 @@ services:
     restart: unless-stopped
 
 volumes:
+  gateway-data:
   mosquitto-data:
