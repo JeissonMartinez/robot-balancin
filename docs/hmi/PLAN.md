@@ -8,7 +8,9 @@ Estado (2026-09-26):
 - **F0 cerrada y validada en el robot**: `protocol_check.py --save` 20/20; cambio de `kd_angle` a 2.0 con el robot equilibrando, aplicado en el ciclo siguiente sin caída.
 - **F3 implementada**: escena 2D/3D con la telemetría en vivo y en reproducción, pestaña Historial (sesiones con búsqueda, gráficas reproducibles sincronizadas con la escena, tabla paginada, eventos, notas, CSV, borrado), página a alto completo con columnas de desplazamiento independiente y Seguridad fija. Probada con el robot simulado en escritorio, iPad mini (vertical y horizontal) y celular. Falta la prueba con el robot.
 - **F2 cerrada y validada en el robot** (parámetros en vivo y por lotes, validación, juegos, exportar, calibración y zona muerta).
-- **F1 cerrada y validada en el robot**: fw 0.3.0 por USB, 50.1 Hz, 0 tramas perdidas, parámetros leídos de NVS, sesión en SQLite, marcas de eventos en las trazas; acceso por la red local (`--host 0.0.0.0`) comprobado en la IP del PC; falta confirmarlo desde el celular. Rama de trabajo: `feat/hmi`.
+- **F1 cerrada y validada en el robot**: fw 0.3.0 por USB, 50.1 Hz, 0 tramas perdidas, parámetros leídos de NVS, sesión en SQLite, marcas de eventos en las trazas; acceso por la red local (`--host 0.0.0.0`) confirmado con PC, iPad y celular a la vez.
+
+Rama de trabajo: `feat/hmi`.
 
 ---
 
