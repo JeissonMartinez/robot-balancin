@@ -176,13 +176,13 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
       <section class="mot-sec">
         <div class="mot-sec-h"><h3>PWM manual</h3><span class="hint muted" id="motManualHint"></span></div>
         <div class="mot-pwm" data-m="L">
-          <span class="name">Izquierdo <span class="key mono">A</span></span>
+          <span class="name">Izquierdo <span class="key mono">canal B</span></span>
           <input class="num mono" type="number" min="-255" max="255" step="1" value="0" aria-label="PWM izquierdo">
           <button class="btn small cero" type="button" title="PWM 0">0</button>
           <input type="range" min="-255" max="255" step="1" value="0" aria-label="PWM izquierdo">
         </div>
         <div class="mot-pwm" data-m="R">
-          <span class="name">Derecho <span class="key mono">B</span></span>
+          <span class="name">Derecho <span class="key mono">canal A</span></span>
           <input class="num mono" type="number" min="-255" max="255" step="1" value="0" aria-label="PWM derecho">
           <button class="btn small cero" type="button" title="PWM 0">0</button>
           <input type="range" min="-255" max="255" step="1" value="0" aria-label="PWM derecho">
@@ -510,7 +510,10 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
       const rpmOther = drive.reduce((a, f) => a + f[`rpm${other}` as const], 0) / drive.length;
       const pwm = drive[drive.length - 1][`pwm${side}` as const];
       if (Math.abs(rpm) < 1 && Math.abs(rpmOther) > 3)
-        return { text: `${name}: con PWM sólo en este motor cuenta el otro encoder (¿cables de encoder cruzados?).`, cls: 'mal' };
+        return {
+          text: `${name}: con PWM sólo en este motor cuenta el otro encoder. Mirar qué rueda gira: si gira la otra, están cruzados los canales del driver (CH_A/CH_B en config.h); si gira ésta, los cables de encoder.`,
+          cls: 'mal',
+        };
       if (Math.abs(rpm) > 3 && Math.sign(rpm) !== Math.sign(pwm))
         return { text: `${name}: con PWM ${pwm > 0 ? 'positivo' : 'negativo'} la RPM sale ${rpm > 0 ? 'positiva' : 'negativa'}: invertir ENC_${side}_SIGN en config.h.`, cls: 'warn' };
     }

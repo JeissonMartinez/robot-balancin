@@ -61,8 +61,8 @@ void driveMotorsDifferential(float pwmL, float pwmR)
 {
   if ((int)fabsf(pwmL) > 0)
     dirL = pwmL > 0 ? 1 : -1;
-  setMotor(AIN1, AIN2, CH_A, pwmL); // Motor izquierdo
-  setMotor(BIN1, BIN2, CH_B, pwmR); // Motor derecho
+  setMotor(BIN1, BIN2, CH_B, pwmL); // Motor izquierdo (canal B)
+  setMotor(AIN1, AIN2, CH_A, pwmR); // Motor derecho (canal A)
 }
 
 float compensateDeadband(float pwm, float deadband)

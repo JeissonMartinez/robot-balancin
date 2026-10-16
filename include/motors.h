@@ -18,8 +18,8 @@ void setupMotors();
 
 /**
  * @brief Aplica PWMs con signo a los dos motores.
- * @param pwmL PWM motor izquierdo (CH_A), -255..255.
- * @param pwmR PWM motor derecho (CH_B), -255..255.
+ * @param pwmL PWM motor izquierdo (canal B: BIN1/BIN2/PWMB), -255..255.
+ * @param pwmR PWM motor derecho (canal A: AIN1/AIN2/PWMA), -255..255.
  */
 void driveMotorsDifferential(float pwmL, float pwmR);
 

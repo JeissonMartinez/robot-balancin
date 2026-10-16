@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.6.2"
+#define FW_VERSION "0.6.3"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -60,8 +60,10 @@ const uint8_t MPU_DLPF_MODE = 3;
 // ===================== PWM ====================================
 #define PWM_FREQ 20000
 #define PWM_RES 8
-const ledc_channel_t CH_A = LEDC_CHANNEL_0; // Motor Izquierdo (A)
-const ledc_channel_t CH_B = LEDC_CHANNEL_1; // Motor Derecho (B)
+// Verificado en el banco (M0, P4): el canal A del TB6612FNG mueve la rueda DERECHA y el B la
+// izquierda (antes se suponía al revés; no importaba porque el control da el mismo PWM a ambos).
+const ledc_channel_t CH_A = LEDC_CHANNEL_0; // Motor derecho (A)
+const ledc_channel_t CH_B = LEDC_CHANNEL_1; // Motor izquierdo (B)
 const ledc_timer_t TIMER_A = LEDC_TIMER_0;
 const ledc_timer_t TIMER_B = LEDC_TIMER_1;
 

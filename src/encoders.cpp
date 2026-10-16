@@ -36,13 +36,13 @@ static inline int fastRead(uint8_t pin)
 }
 
 static void configChannel(pcnt_unit_t unit, pcnt_channel_t ch, int edgePin, int levelPin, pcnt_count_mode_t pos,
-                          pcnt_count_mode_t neg)
+                          pcnt_count_mode_t neg, pcnt_ctrl_mode_t lowLevel = PCNT_MODE_REVERSE)
 {
   pcnt_config_t c = {};
   c.pulse_gpio_num = edgePin;
   c.ctrl_gpio_num = levelPin;
-  c.hctrl_mode = PCNT_MODE_KEEP;    // nivel alto del otro canal: el sentido de pos/neg
-  c.lctrl_mode = PCNT_MODE_REVERSE; // nivel bajo: sentido contrario
+  c.hctrl_mode = PCNT_MODE_KEEP; // nivel alto del otro canal: el sentido de pos/neg
+  c.lctrl_mode = lowLevel;       // nivel bajo: sentido contrario (cuadratura)
   c.pos_mode = pos;
   c.neg_mode = neg;
   c.counter_h_lim = PCNT_LIMIT;
@@ -60,8 +60,10 @@ static void configChannel(pcnt_unit_t unit, pcnt_channel_t ch, int edgePin, int 
 /** Un solo canal: cada flanco de A suma +1, sin mirar B (el sentido lo pone pollLocked). */
 static void setupSingleChannelUnit(pcnt_unit_t unit, int pinA)
 {
-  configChannel(unit, PCNT_CHANNEL_0, pinA, PCNT_PIN_NOT_USED, PCNT_COUNT_INC, PCNT_COUNT_INC);
-  configChannel(unit, PCNT_CHANNEL_1, PCNT_PIN_NOT_USED, PCNT_PIN_NOT_USED, PCNT_COUNT_DIS, PCNT_COUNT_DIS);
+  // Sin pin de control el PCNT lo lee como nivel bajo: con REVERSE contaría hacia abajo
+  configChannel(unit, PCNT_CHANNEL_0, pinA, PCNT_PIN_NOT_USED, PCNT_COUNT_INC, PCNT_COUNT_INC, PCNT_MODE_KEEP);
+  configChannel(unit, PCNT_CHANNEL_1, PCNT_PIN_NOT_USED, PCNT_PIN_NOT_USED, PCNT_COUNT_DIS, PCNT_COUNT_DIS,
+                PCNT_MODE_KEEP);
   ESP_ERROR_CHECK(pcnt_set_filter_value(unit, GLITCH_CYCLES));
   ESP_ERROR_CHECK(pcnt_filter_enable(unit));
   ESP_ERROR_CHECK(pcnt_counter_pause(unit));
