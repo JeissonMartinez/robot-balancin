@@ -12,7 +12,7 @@ Firmware para un **robot balancín** (péndulo invertido sobre dos ruedas) basad
 
 ## ✨ Características principales
 
-- 🦾 **Dos estructuras de control** que se eligen con una línea en `config.h`, sin perder los parámetros de ninguna:
+- 🦾 **Tres estructuras de control** que se eligen en ejecución (parámetro `structure`), sin perder los parámetros de ninguna. `RpmCascade` (fw 0.8.0) es la nueva cascada ángulo → aceleración → RPM → PWM, sin red neuronal; las otras dos:
   - `SpeedOuter` (activa por defecto): estructura estándar de balancín. Un PI de velocidad fija el ángulo deseado y un PD de ángulo genera el PWM. Mantiene el robot en su sitio.
   - `AngleOuter`: estructura original. Un PID de ángulo genera una referencia de velocidad y un PI de velocidad genera el PWM.
 - 🧠 **Red neuronal** (3-3-1, librería local `Neural_Networks_FF`) que adapta `Kp` entre `KP_MIN` y `KP_MAX`. Si ambos valen lo mismo, `Kp` queda fija.
@@ -146,6 +146,8 @@ Los motorreductores (1:119) se comportan casi como fuentes de velocidad. Con el 
 | `console.h/.cpp` | Salida de texto para humanos por Serial y WiFi a la vez. |
 | `protocol.h/.cpp` | Protocolo con la HMI: comandos JSON, respuestas y formato de telemetría (`docs/hmi/PROTOCOLO.md` (documentación interna)). |
 | `encoders.h/.cpp` | Encoders con el contador por hardware (PCNT) en cuadratura x4 y filtro de glitches; RPM filtradas; flancos por canal y nivel de los pines para el diagnóstico. |
+| `rpm_loop.h/.cpp` | Lazo de RPM de una rueda: prealimentación + PI con modelo de referencia (lo usan el banco y `RpmCascade`). |
+| `rpm_cascade.h/.cpp` | Estructura `RpmCascade`: el lazo de ángulo pide aceleración de rueda, que se integra en la RPM deseada del lazo de RPM (200 Hz). |
 | `bench.h/.cpp` | Banco de motores: con el control en pausa, PWM manual por motor y ensayos de tramos `[PWM, ms]` muestreados cada 1–20 ms en RAM. |
 | `motors.h/.cpp` | PWM LEDC, driver TB6612FNG y compensación de zona muerta. |
 | `mpu_block.h/.cpp` | MPU6050: conexión, filtro pasa-bajas, calibración en NVS y filtro complementario. |
