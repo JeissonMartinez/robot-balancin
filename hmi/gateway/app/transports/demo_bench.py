@@ -11,6 +11,7 @@ PI con integración condicional), con el izquierdo como seguidor.
 """
 from __future__ import annotations
 
+import math
 import random
 
 PPR_MOTOR = 11
@@ -29,7 +30,7 @@ RING = 64
 ENC = {"ppr": PPR_MOTOR, "decode": DECODE, "gear": GEAR, "cpw": CPW}
 CAP_STATES = ("none", "running", "done", "aborted")
 DEFAULT_CFG = {"kp": 1.33, "ki": 67.0, "ts_ms": 5, "win_ms": 10, "ff": True, "ff_k": 0.25, "ff_b": 1.8,
-               "i_max": 100.0, "follow": True}
+               "i_max": 255.0, "follow": True, "ref_tau_ms": 20}
 
 
 class SimMotor:
@@ -68,7 +69,7 @@ class RpmLoop:
 
     def reset(self):
         self.integ = self.uF = self.uP = self.out = 0.0
-        self.last_ref = 0.0
+        self.last_ref = self.ref_f = 0.0
 
     def step(self, c: dict, ref: float, y: float, dt: float) -> float:
         self.meas = y
@@ -78,7 +79,11 @@ class RpmLoop:
         if _sgn(ref) != _sgn(self.last_ref):
             self.integ = 0.0
         self.last_ref = ref
-        e = ref - y
+        if c["ref_tau_ms"] > 0:
+            self.ref_f += (ref - self.ref_f) * (1 - math.exp(-dt / (c["ref_tau_ms"] / 1000)))
+        else:
+            self.ref_f = ref
+        e = self.ref_f - y
         self.uF = _sgn(ref) * (abs(ref) + c["ff_b"]) / c["ff_k"] if c["ff"] and c["ff_k"] > 0 else 0.0
         self.uP = c["kp"] * e
         cand = max(-c["i_max"], min(c["i_max"], self.integ + c["ki"] * e * dt))
@@ -180,11 +185,11 @@ class SimBench:
                 return f"{k} debe ser numérico"
             c[k] = v
         checks = [("kp", 0, 20), ("ki", 0, 2000), ("ts_ms", 1, 20), ("win_ms", 1, RING - 4), ("ff_k", 0.05, 1),
-                  ("ff_b", 0, 20), ("i_max", 0, 255)]
+                  ("ff_b", 0, 20), ("i_max", 0, 255), ("ref_tau_ms", 0, 200)]
         for k, lo, hi in checks:
             if not lo <= c[k] <= hi:
                 return f"{k} debe estar en [{lo:g}, {hi:g}]"
-        c["ts_ms"], c["win_ms"] = int(c["ts_ms"]), int(c["win_ms"])
+        c["ts_ms"], c["win_ms"], c["ref_tau_ms"] = int(c["ts_ms"]), int(c["win_ms"]), int(c["ref_tau_ms"])
         self.cfg = c
         return None
 
@@ -232,7 +237,7 @@ class SimBench:
             cap.update(kind="rpm" if self.cap_rpm else "pwm", period_ms=self.cap_period,
                        motor={1: "L", 2: "R", 3: "LR"}[self.cap_motor], seq=self.cap_seq)
             if self.cap_rpm:
-                cap["rpmcfg"] = {k: self.cfg[k] for k in ("kp", "ki", "ts_ms", "win_ms", "ff", "follow")}
+                cap["rpmcfg"] = {k: self.cfg[k] for k in ("kp", "ki", "ts_ms", "win_ms", "ff", "follow", "ref_tau_ms")}
         return {"on": self.on, "estop": estop, "mode": "rpm" if self.mode_rpm else "pwm", "pwm": list(self.manual),
                 "ref": self.manual_ref, "max_samples": MAX_SAMPLES, "max_rpm": MAX_RPM, "rpmcfg": dict(self.cfg),
                 "cap": cap}
@@ -317,6 +322,7 @@ class SimBench:
             "eLA": int(e[0] - self._edges0[0]), "eLB": int(e[1] - self._edges0[1]),
             "eRA": int(e[2] - self._edges0[2]), "eRB": int(e[3] - self._edges0[3]), "lv": lv, "es": int(estop),
             "mode": "rpm" if rpm_active else "pwm", "ref": round(ref if rpm_active else 0.0, 2),
+            "rf": round(self.loop.ref_f if rpm_active else 0.0, 2),
             "y": round(self.loop.meas, 2), "uF": round(self.loop.uF if rpm_active else 0.0, 1),
             "uP": round(self.loop.uP if rpm_active else 0.0, 1), "uI": round(self.loop.integ if rpm_active else 0.0, 1),
             "cs": CAP_STATES[self.cap_state], "ci": self.cap_id, "ck": len(self.cap_rows), "cn": self.cap_total,

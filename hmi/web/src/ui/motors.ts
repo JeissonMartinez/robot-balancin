@@ -32,7 +32,7 @@ const SEND_THROTTLE_MS = 120;
 const MAX_SEGMENTS = 16;
 const MAX_RPM = 60;
 /** Valores iniciales del lazo (M1: K = 0.25 RPM/PWM, τ = 20 ms, λ = 50 ms), iguales a config.h. */
-const DEFAULT_RPMCFG: RpmConfig = { kp: 1.33, ki: 67, ts_ms: 5, win_ms: 10, ff: true, ff_k: 0.25, ff_b: 1.8, i_max: 100, follow: true };
+const DEFAULT_RPMCFG: RpmConfig = { kp: 1.33, ki: 67, ts_ms: 5, win_ms: 10, ff: true, ff_k: 0.25, ff_b: 1.8, i_max: 255, follow: true, ref_tau_ms: 20 };
 
 const LIVE_PLOTS: PlotDef[] = [
   {
@@ -41,6 +41,7 @@ const LIVE_PLOTS: PlotDef[] = [
       { key: 'rpmR', label: 'derecha', slot: 1, decimals: 1 },
       { key: 'rpmL', label: 'izquierda', slot: 2, decimals: 1 },
       { key: 'ref', label: 'referencia', slot: 3, dash: [6, 4], decimals: 1 },
+      { key: 'rf', label: 'ref. filtrada', slot: 4, dash: [2, 3], decimals: 1 },
     ],
   },
   {
@@ -236,6 +237,7 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
               <label class="field"><span>Prealim. K [RPM/PWM]</span><input type="number" data-c="ff_k" step="0.01" min="0.05" max="1"></label>
               <label class="field"><span>Prealim. B [RPM]</span><input type="number" data-c="ff_b" step="0.1" min="0" max="20"></label>
               <label class="field"><span>Tope de I [PWM]</span><input type="number" data-c="i_max" step="5" min="0" max="255"></label>
+              <label class="field"><span>Modelo de ref. τ [ms]</span><input type="number" data-c="ref_tau_ms" step="5" min="0" max="200"></label>
               <div class="field"><span>Opciones</span>
                 <label class="switch"><input type="checkbox" data-c="ff"> Prealimentación</label>
                 <label class="switch"><input type="checkbox" data-c="follow"> Izquierdo seguidor</label>
@@ -499,6 +501,7 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
   function writeCfg(c: RpmConfig) {
     for (const el of cfgEls) {
       const v = c[el.dataset.c as keyof RpmConfig];
+      if (v === undefined) continue; // campo de un firmware más nuevo
       if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = !!v;
       else el.value = String(v);
     }
@@ -764,7 +767,7 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
         const rpm = f.mode === 'rpm';
         return {
           ...f, zL: f.cL - z.cL, zR: f.cR - z.cR,
-          ref: rpm ? f.ref : null, uF: rpm ? f.uF : null, uP: rpm ? f.uP : null, uI: rpm ? f.uI : null,
+          ref: rpm ? f.ref : null, rf: rpm ? f.rf : null, uF: rpm ? f.uF : null, uP: rpm ? f.uP : null, uI: rpm ? f.uI : null,
         };
       }),
     );
@@ -849,7 +852,7 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
     });
     const res = (60 / (cpw * 2 * h * c.period_ms * 1e-3)).toFixed(2);
     const lazo = isRpm && c.cfg
-      ? `lazo Kp ${c.cfg.kp} · Ki ${c.cfg.ki} · período ${c.cfg.ts_ms} ms · ventana ${c.cfg.win_ms} ms · prealim. ${c.cfg.ff ? 'sí' : 'no'} · `
+      ? `lazo Kp ${c.cfg.kp} · Ki ${c.cfg.ki} · período ${c.cfg.ts_ms} ms · ventana ${c.cfg.win_ms} ms · prealim. ${c.cfg.ff ? 'sí' : 'no'}${c.cfg.ref_tau_ms !== undefined ? ` · modelo de ref. ${c.cfg.ref_tau_ms} ms` : ''} · `
       : '';
     $('motEnsMeta').textContent =
       `${isRpm ? 'RPM · ' + lazo : ''}motor ${c.motor} · muestreo ${c.period_ms} ms · ventana ${2 * h * c.period_ms} ms → resolución ${res} RPM por cuenta · ${cpw} cuentas/vuelta`;

@@ -46,6 +46,7 @@ export interface MotFrame {
   es: number; // 1 = parada de emergencia activa
   mode?: 'pwm' | 'rpm'; // fw ≥ 0.7.0: de dónde sale el mando
   ref?: number; // referencia del lazo de RPM
+  rf?: number; // fw ≥ 0.7.1: referencia filtrada por el modelo de referencia
   y?: number; // RPM que mide el lazo (ventana win_ms)
   uF?: number; // prealimentación [PWM]
   uP?: number; // término proporcional [PWM]
@@ -76,6 +77,7 @@ export interface RpmConfig {
   ff_b: number;
   i_max: number;
   follow: boolean;
+  ref_tau_ms?: number; // fw ≥ 0.7.1
 }
 
 /** Estado del banco (respuesta a "bench"). */

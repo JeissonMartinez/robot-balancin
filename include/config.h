@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.7.0"
+#define FW_VERSION "0.7.1"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -120,7 +120,14 @@ const uint8_t RPM_TS_MS_DEFAULT = 5;         // Período del lazo [ms]
 const uint8_t RPM_WIN_MS_DEFAULT = 10;       // Ventana de medición de la RPM [ms] (1 cuenta = 2.3 RPM)
 const float RPM_FF_K_DEFAULT = 0.25f;        // Prealimentación: RPM ≈ K·|u| − B → u_ff = (|r| + B)/K
 const float RPM_FF_B_DEFAULT = 1.8f;         // [RPM]
-const float RPM_I_MAX_DEFAULT = 100.0f;      // Tope del término integral [PWM]
+// Modelo de referencia (M2, 0.7.1): el error se calcula contra la referencia filtrada con
+// esta constante de tiempo (la del motor, M1), mientras la prealimentación usa la referencia
+// sin filtrar. Si el motor se parece al modelo, el error en la subida es ~0 y el PI no agrega
+// sobrepico (con 0.7.0 el escalón 10 → 30 RPM tenía ~17 % de sobrepico). 0 = sin modelo.
+const uint8_t RPM_REF_TAU_MS_DEFAULT = 20;
+// Tope del término integral [PWM]. La integración condicional ya evita el windup en saturación;
+// 100 (0.7.0) no alcanzaba sin prealimentación (a 30 RPM hacen falta ~130 de PWM).
+const float RPM_I_MAX_DEFAULT = 255.0f;
 const float BENCH_MAX_RPM = 60.0f;           // Referencia máxima [RPM] (≈ 61 RPM con PWM 255 a 7.65 V)
 
 // ===================== CONTROL ================================

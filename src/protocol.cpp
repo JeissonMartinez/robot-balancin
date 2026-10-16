@@ -103,11 +103,11 @@ void protocolWriteBench(const BenchFrame &f, Print &out, bool json)
     n = snprintf(buf, sizeof(buf),
                  "{\"type\":\"mot\",\"seq\":%lu,\"t\":%lu,\"pwmL\":%d,\"pwmR\":%d,\"cL\":%ld,\"cR\":%ld,"
                  "\"rpmL\":%.2f,\"rpmR\":%.2f,\"eLA\":%lu,\"eLB\":%lu,\"eRA\":%lu,\"eRB\":%lu,\"lv\":%u,\"es\":%d,"
-                 "\"mode\":\"%s\",\"ref\":%.2f,\"y\":%.2f,\"uF\":%.1f,\"uP\":%.1f,\"uI\":%.1f,"
+                 "\"mode\":\"%s\",\"ref\":%.2f,\"rf\":%.2f,\"y\":%.2f,\"uF\":%.1f,\"uP\":%.1f,\"uI\":%.1f,"
                  "\"cs\":\"%s\",\"ci\":%u,\"ck\":%lu,\"cn\":%lu}\n",
                  (unsigned long)f.seq, (unsigned long)f.tMs, f.pwmL, f.pwmR, (long)f.cL, (long)f.cR, f.rpmL, f.rpmR,
                  (unsigned long)f.edges[0], (unsigned long)f.edges[1], (unsigned long)f.edges[2],
-                 (unsigned long)f.edges[3], f.levels, f.estop ? 1 : 0, f.rpmMode ? "rpm" : "pwm", f.ref, f.meas, f.uF,
+                 (unsigned long)f.edges[3], f.levels, f.estop ? 1 : 0, f.rpmMode ? "rpm" : "pwm", f.ref, f.refF, f.meas, f.uF,
                  f.uP, f.uI, benchCapStateName(f.capState), f.capId, (unsigned long)f.capCount,
                  (unsigned long)f.capTotal);
   else if (f.rpmMode)
@@ -313,8 +313,8 @@ static void handleBench(JsonDocument &in, Print &out, JsonVariantConst id)
       return true;
     };
     if (!num("kp", c.kp) || !num("ki", c.ki) || !u8("ts_ms", c.tsMs) || !u8("win_ms", c.winMs) || !flag("ff", c.ff) ||
-        !num("ff_k", c.ffK) || !num("ff_b", c.ffB) || !num("i_max", c.iMax) || !flag("follow", c.follow))
-      return ack(out, id, false, "rpmcfg: kp, ki, ff_k, ff_b, i_max numéricos; ts_ms, win_ms enteros; ff, follow true/false");
+        !num("ff_k", c.ffK) || !num("ff_b", c.ffB) || !num("i_max", c.iMax) || !flag("follow", c.follow) || !u8("ref_tau_ms", c.refTauMs))
+      return ack(out, id, false, "rpmcfg: kp, ki, ff_k, ff_b, i_max numéricos; ts_ms, win_ms, ref_tau_ms enteros; ff, follow true/false");
     return benchSetRpmConfig(c, err) ? ackBench(out, id) : ack(out, id, false, err);
   }
   if (strcmp(op, "run") == 0)

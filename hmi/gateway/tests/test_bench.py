@@ -1,4 +1,5 @@
 """Banco de motores: lógica del ensayo (simulador) y flujo completo con el gateway."""
+import random
 import time
 
 import pytest
@@ -142,3 +143,23 @@ def test_rpm_capture_end_to_end(client):
         assert cap["rows"][200][5] == 205  # referencia · 10
         csv = client.get(f"/api/captures/{ready['id']}.csv").text.splitlines()
         assert csv[1].endswith(",ref_rpm") and csv[2 + 200].endswith(",20.5")
+
+
+def _overshoot(ref_tau):
+    random.seed(3)
+    b = SimBench()
+    b.enter()
+    assert b.set_cfg({"ref_tau_ms": ref_tau}) is None
+    b.set_rpm(10, estop=False)
+    for _ in range(400):
+        b.tick(estop=False)
+    b.set_rpm(30, estop=False)
+    peak = 0.0
+    for _ in range(400):
+        b.tick(estop=False)
+        peak = max(peak, b.motors[1].rpm)
+    return (peak - 30) / 20
+
+
+def test_reference_model_reduces_overshoot():
+    assert _overshoot(20) < _overshoot(0) - 0.05

@@ -42,7 +42,7 @@ float manualRef = 0;
 uint32_t manualMs = 0;
 bool manualExpired = false;
 RpmConfig cfg = {RPM_KP_DEFAULT, RPM_KI_DEFAULT, RPM_TS_MS_DEFAULT, RPM_WIN_MS_DEFAULT, true,
-                 RPM_FF_K_DEFAULT, RPM_FF_B_DEFAULT, RPM_I_MAX_DEFAULT, true};
+                 RPM_FF_K_DEFAULT, RPM_FF_B_DEFAULT, RPM_I_MAX_DEFAULT, true, RPM_REF_TAU_MS_DEFAULT};
 
 Sample *buf = nullptr;
 float segVal[BENCH_MAX_SEGMENTS];
@@ -84,12 +84,12 @@ inline float sgn(float v)
 /** Estado del lazo de RPM (sólo lo usa TaskBanco). */
 struct RpmLoop
 {
-  float integ = 0, uF = 0, uP = 0, out = 0, meas = 0, lastRef = 0;
+  float integ = 0, uF = 0, uP = 0, out = 0, meas = 0, lastRef = 0, refF = 0;
 
   void reset()
   {
     integ = uF = uP = out = 0;
-    lastRef = 0;
+    lastRef = refF = 0;
   }
 
   /** Un paso del lazo. `dt` en s; devuelve el PWM a aplicar. */
@@ -105,7 +105,12 @@ struct RpmLoop
     if (sgn(ref) != sgn(lastRef))
       integ = 0; // cambio de sentido: el integral acumulado ya no sirve
     lastRef = ref;
-    const float e = ref - y;
+    // Modelo de referencia: la respuesta que se espera del motor a la prealimentación
+    if (c.refTauMs > 0)
+      refF += (ref - refF) * (1.0f - expf(-dt / (c.refTauMs * 1e-3f)));
+    else
+      refF = ref;
+    const float e = refF - y;
     uF = c.ff && c.ffK > 0 ? sgn(ref) * (fabsf(ref) + c.ffB) / c.ffK : 0;
     uP = c.kp * e;
     // Integración condicional: no integrar si el mando ya está saturado en el sentido del error
@@ -315,6 +320,7 @@ void TaskBanco(void *)
       f.estop = estop;
       f.rpmMode = rpmActive;
       f.ref = rpmActive ? ref : 0;
+      f.refF = rpmActive ? loop.refF : 0;
       f.meas = loop.meas;
       f.uF = rpmActive ? loop.uF : 0;
       f.uP = rpmActive ? loop.uP : 0;
@@ -475,6 +481,8 @@ bool benchSetRpmConfig(const RpmConfig &n, String &err)
     return fail(err, "ff_b debe estar en [0, 20]");
   if (!(n.iMax >= 0 && n.iMax <= 255))
     return fail(err, "i_max debe estar en [0, 255]");
+  if (n.refTauMs > 200)
+    return fail(err, "ref_tau_ms debe estar en [0, 200]");
   portENTER_CRITICAL(&mux);
   cfg = n;
   portEXIT_CRITICAL(&mux);
@@ -632,6 +640,7 @@ void benchStatusJson(JsonObject out)
   rc["ff_b"] = c.ffB;
   rc["i_max"] = c.iMax;
   rc["follow"] = c.follow;
+  rc["ref_tau_ms"] = c.refTauMs;
   JsonObject cap = out["cap"].to<JsonObject>();
   cap["id"] = ci;
   cap["st"] = benchCapStateName(cs);
@@ -661,6 +670,7 @@ void benchStatusJson(JsonObject out)
       used["win_ms"] = c.winMs;
       used["ff"] = c.ff;
       used["follow"] = c.follow;
+      used["ref_tau_ms"] = c.refTauMs;
     }
   }
 }

@@ -9,7 +9,8 @@
  *   aplica el PWM; cada BENCH_LIVE_MS encola una trama "mot".
  * - Modo PWM: valor fijo por motor, sin compensar zona muerta.
  * - Modo RPM (M2): lazo de la rueda derecha cada `ts_ms`, con la RPM medida sobre los últimos
- *   `win_ms`: u = u_ff + Kp·e + Ki·∫e (anti-windup por integración condicional y tope). El
+ *   `win_ms`: u = u_ff(r) + Kp·e + Ki·∫e, con e = r_f − y y r_f la referencia filtrada con
+ *   `ref_tau_ms` (modelo de referencia), anti-windup por integración condicional y tope. El
  *   izquierdo, con el encoder dañado, recibe el mismo PWM (seguidor) si `follow`. Con
  *   referencia 0 el PWM es 0 (freno) y el integral se reinicia.
  * - El mando manual (PWM o RPM) se apaga si no se renueva en BENCH_MANUAL_TIMEOUT_MS.
@@ -35,6 +36,7 @@ struct RpmConfig
   float ffK;     // [RPM/PWM]
   float ffB;     // [RPM]
   float iMax;    // tope del integral [PWM]
+  uint8_t refTauMs; // modelo de referencia: τ del filtro de la referencia para el error (0 = sin filtro)
   bool follow;   // el izquierdo recibe el mismo PWM
 };
 
@@ -51,6 +53,7 @@ struct BenchFrame
   bool estop;          // parada de emergencia activa
   bool rpmMode;        // el mando viene del lazo de RPM
   float ref;           // referencia de RPM
+  float refF;          // referencia filtrada (modelo de referencia)
   float meas;          // RPM que mide el lazo (ventana win_ms)
   float uF, uP, uI;    // términos del mando [PWM]
   uint8_t capState;    // 0 ninguno, 1 en curso, 2 terminado, 3 abortado
