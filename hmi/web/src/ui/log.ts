@@ -26,6 +26,14 @@ export function describeEvent(ev: GwEvent): { kind: string; text: string; cls: s
       return { kind: 'enlace', text: 'desconectado', cls: '' };
     case 'reboot':
       return { kind: 'enlace', text: 'el robot se reinició: nueva sesión', cls: 'bad' };
+    case 'capture':
+      return {
+        kind: 'banco',
+        text: `ensayo ${p.cap} ${p.state === 'done' ? 'guardado' : 'abortado, guardado'} · motor ${p.motor} · ${p.n} muestras`,
+        cls: p.state === 'done' ? '' : 'bad',
+      };
+    case 'capture_error':
+      return { kind: 'banco', text: `no se pudo leer el ensayo ${p.cap}: ${p.err}`, cls: 'bad' };
     case 'connection_lost':
       return { kind: 'enlace', text: p.reason ?? 'conexión perdida', cls: 'bad' };
     default:

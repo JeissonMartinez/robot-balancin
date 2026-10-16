@@ -1,25 +1,27 @@
 /**
  * @file encoders.h
- * @brief Encoders por cuadratura de ambas ruedas y cálculo de RPM.
+ * @brief Encoders por cuadratura de ambas ruedas: cuentas, RPM y diagnóstico.
  *
- * - Interrupción CHANGE sólo en el canal A de cada encoder (x2 respecto a CPR por
- *   canal); el sentido se obtiene comparando A con B.
- * - Las ISR leen los GPIO directamente por registro (IRAM-safe): no llaman a
- *   digitalRead(), que vive en flash y provocaría un fallo si llega un pulso
- *   mientras se escribe en NVS (caché de flash deshabilitada).
- * - Los contadores se protegen con un spinlock, de modo que leer-y-reiniciar es
- *   atómico frente a las ISR y no se pierden pulsos.
+ * - Cada encoder usa una unidad del contador de pulsos por hardware (PCNT) en cuadratura
+ *   x4: cuenta los flancos de subida y de bajada de A y de B, sin interrupciones por
+ *   pulso. Un filtro de glitches (ENC_GLITCH_NS) descarta los pulsos de ruido cortos.
+ * - El contador de 16 bits se lee cada 10 ms (esp_timer) y en cada consulta, y se acumula
+ *   en 32 bits con aritmética módulo su límite: no se pierde ninguna cuenta.
+ * - Convención de signo igual a la de la versión anterior (interrupción en A): ENC_*_SIGN
+ *   sigue haciendo que PWM > 0 dé cuentas y RPM > 0.
+ * - Diagnóstico (banco de motores): contadores de flancos de cada canal por separado,
+ *   con interrupciones que sólo se activan en el banco, y nivel actual de cada pin.
+ *   Si un canal no tiene flancos, el PCNT no puede contar (cuadratura sin una fase).
  */
 #pragma once
 #include <Arduino.h>
 
-/** Configura pines e interrupciones de ambos encoders. */
+/** Configura pines y contadores de ambos encoders. */
 void setupEncoders();
 
 /**
- * @brief Lee y pone a cero los contadores de forma atómica.
- * @param pulsesL Pulsos del encoder izquierdo desde la última llamada.
- * @param pulsesR Pulsos del encoder derecho desde la última llamada.
+ * @brief Pulsos de cada encoder desde la última llamada (sin aplicar ENC_*_SIGN).
+ *        Lo usan TaskBalanceo y la prueba de zona muerta (nunca a la vez).
  */
 void readAndResetEncoders(long &pulsesL, long &pulsesR);
 
@@ -33,3 +35,15 @@ void updateWheelRPM(float dt, float &rpmL_f, float &rpmR_f);
 
 /** Descarta los pulsos acumulados y reinicia el filtro de RPM. */
 void resetWheelRPM();
+
+/** Cuentas acumuladas desde el arranque, con ENC_*_SIGN aplicado (PWM > 0 → aumentan). */
+void encoderCounts(int32_t &countL, int32_t &countR);
+
+/** Activa o desactiva los contadores de flancos por canal (los pone a cero al activar). */
+void encoderEdgeCount(bool on);
+
+/** Flancos por canal desde que se activaron: [L_A, L_B, R_A, R_B]. */
+void encoderEdges(uint32_t out[4]);
+
+/** Nivel actual de los pines: bit0 L_A, bit1 L_B, bit2 R_A, bit3 R_B. */
+uint8_t encoderLevels();

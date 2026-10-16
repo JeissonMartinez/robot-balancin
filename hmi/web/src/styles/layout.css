@@ -28,7 +28,7 @@ main{
   /* Alto definido (base 0): el contenido se ajusta a la tarjeta y no al revés */
   #cardVista{flex:1 1 0; min-height:500px; display:flex; flex-direction:column}
   .vista-body{flex:1; min-height:0; display:flex}
-  .panel-vivo, .panel-hist{flex:1; min-height:0; min-width:0}
+  .panel-vivo, .panel-hist, .panel-mot{flex:1; min-height:0; min-width:0}
   .panel-vivo{display:grid; grid-template-columns:minmax(260px,34%) minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:10px; padding:10px}
   .panel-vivo .plots{min-height:0; overflow-y:auto; padding:0}
   .tiles{grid-template-columns:repeat(6,minmax(0,1fr))}
@@ -84,7 +84,7 @@ main{
 
   body[data-m] .tiles, body[data-m] #cardVista, body[data-m] .side-scroll > *{display:none}
   body[data-m="vivo"] .tiles, body[data-m="vivo"] #cardVista,
-  body[data-m="hist"] #cardVista,
+  body[data-m="hist"] #cardVista, body[data-m="mot"] #cardVista,
   body[data-m="ajustes"] #cardParametros, body[data-m="ajustes"] #cardJuegos,
   body[data-m="ajustes"] #cardWifi, body[data-m="ajustes"] #cardComandos,
   body[data-m="con"] #cardConexion, body[data-m="con"] #cardRegistro, body[data-m="con"] .pie{display:block}
@@ -104,7 +104,7 @@ main{
   .log{max-height:none}
 
   .mnav{
-    display:grid; grid-template-columns:repeat(4,1fr); position:fixed; left:0; right:0; bottom:0; z-index:30;
+    display:grid; grid-template-columns:repeat(5,1fr); position:fixed; left:0; right:0; bottom:0; z-index:30;
     background:var(--surface); border-top:1px solid var(--line);
     padding:4px 4px calc(4px + env(safe-area-inset-bottom));
     box-shadow:0 -6px 20px -14px rgba(0,0,0,.4);
@@ -190,6 +190,65 @@ table.tel tbody tr:hover{background:var(--surface-2)}
   .hist-graf{display:flex; flex-direction:column}
   .hist-graf .escena-host{height:260px}
   .tabla-wrap{max-height:60vh}
+}
+
+/* ===================== motores (banco) =====================
+   Controles a la izquierda con su propio desplazamiento; trazas del banco o del ensayo a
+   la derecha. En celular, una columna. */
+.panel-mot{display:flex}
+.mot{display:grid; grid-template-columns:340px minmax(0,1fr); grid-template-rows:minmax(0,1fr); flex:1; min-height:0; min-width:0}
+.mot-ctl{display:flex; flex-direction:column; min-height:0; overflow-y:auto; border-right:1px solid var(--line-soft); overscroll-behavior:contain}
+.mot-sec{display:flex; flex-direction:column; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line-soft)}
+.mot-sec-h{display:flex; align-items:center; gap:8px}
+.mot-sec-h h3{font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3)}
+.mot-sec-h .pill, .mot-sec-h .hint{margin-left:auto; font-size:11px}
+.mot-nota{font-size:11px; line-height:1.4}
+.mot-pwm{display:grid; grid-template-columns:minmax(0,1fr) 74px auto; gap:3px 6px; align-items:center}
+.mot-pwm .name{font-size:12.5px; color:var(--ink-2)}
+.mot-pwm .key{font-size:10px; color:var(--ink-3)}
+.mot-pwm .num{text-align:right; padding:2px 6px; min-height:28px}
+.mot-pwm input[type=range]{grid-column:1/-1; width:100%; accent-color:var(--azul); margin:0}
+.mot-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:7px 8px}
+.mot-grid .full{grid-column:1/-1}
+.mot-grid input, .mot-grid select, .mot-grid textarea{width:100%}
+.mot-grid .seg{width:100%}
+.mot-grid .seg button{flex:1; padding:5px 6px}
+textarea{border:1px solid var(--line); border-radius:7px; background:var(--surface-2); padding:6px 8px; font-size:12px; resize:vertical; color:inherit}
+.mot-resumen{font-size:11px; line-height:1.45; color:var(--ink-2); overflow-wrap:anywhere}
+.mot-prog{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--ink-2)}
+.mot-prog progress{flex:1; accent-color:var(--azul)}
+table.mot-enc{border-collapse:collapse; font-size:11.5px; width:100%}
+table.mot-enc th{font-weight:400; color:var(--ink-3); text-align:left; padding:3px 4px; white-space:nowrap}
+table.mot-enc thead th{text-align:right; font-size:10px; letter-spacing:.1em; text-transform:uppercase}
+table.mot-enc td{text-align:right; padding:3px 4px; border-top:1px solid var(--line-soft); white-space:nowrap}
+.mot-diag{font-size:11.5px; line-height:1.4; color:var(--ink-2); padding-left:8px; border-left:3px solid var(--line)}
+.mot-diag:empty{display:none}
+.mot-diag.ok{border-left-color:var(--verde)}
+.mot-diag.info{border-left-color:var(--azul)}
+.mot-diag.warn{border-left-color:var(--ambar)}
+.mot-diag.mal{border-left-color:var(--rojo); color:var(--ink)}
+.mot-vueltas{display:grid; grid-template-columns:110px minmax(0,1fr); gap:8px; align-items:end}
+.mot-vista{display:flex; flex-direction:column; min-height:0; min-width:0}
+.mot-vista-h{display:flex; align-items:center; gap:8px 12px; padding:8px 10px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap}
+.mot-ens-bar{flex:1; min-width:0}
+.mot-ens-bar select#motLista{flex:1; min-width:160px; max-width:440px}
+.field-inline{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-3)}
+.field-inline select{min-height:28px; padding:2px 6px}
+.mot-ens-bar a.btn{text-decoration:none; display:inline-flex; align-items:center}
+.mot-panel{flex:1; min-height:0; display:flex; flex-direction:column; gap:6px; padding:6px 8px}
+.mot-panel .plots{flex:1; min-height:0; overflow-y:auto; padding:0}
+.mot-ens-info{display:flex; flex-direction:column; gap:4px}
+.mot-ens-info input{width:100%}
+.mot-tramos{flex:none; max-height:30%}
+
+@media (min-width:701px) and (max-width:1080px){
+  .mot{grid-template-columns:290px minmax(0,1fr)}
+}
+@media (max-width:700px){
+  .mot{display:flex; flex-direction:column}
+  .mot-ctl{border-right:0; overflow:visible}
+  .mot-panel .plots{overflow:visible}
+  .mot-tramos{max-height:none}
 }
 
 /* ===================== parada de emergencia ===================== */

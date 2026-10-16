@@ -14,21 +14,23 @@
  *   gráficos se reconstruyen al cambiar el tema.
  * - Leyenda propia sobre cada gráfico: muestra de la línea (color y trazo), nombre y
  *   valor (el último, o el del cursor). Un clic muestra u oculta la serie.
+ * - Los gráficos por defecto son los de la telemetría del control (PLOTS); la pestaña
+ *   Motores pasa los suyos (opción `plots`) con otras claves de trama.
  */
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
-import type { Frame, FrameKey } from '../core/protocol';
+import type { FrameKey } from '../core/protocol';
 import { cssVar } from '../ui/theme';
 
-interface SeriesDef {
-  key: FrameKey;
+export interface SeriesDef {
+  key: FrameKey | string;
   label: string;
   slot: 1 | 2 | 3 | 4 | 5;
   dash?: number[];
   show?: boolean;
   decimals: number;
 }
-interface PlotDef {
+export interface PlotDef {
   id: string;
   title: string;
   unit: string;
@@ -68,7 +70,6 @@ export const PLOTS: PlotDef[] = [
 
 const RATE_HZ = 50;
 const MAX_SECONDS = 60;
-const CAPACITY = RATE_HZ * MAX_SECONDS;
 
 interface Marker {
   t: number; // s, tiempo del robot
@@ -79,6 +80,10 @@ type Col = (number | null)[];
 
 export interface TracesOptions {
   mode?: 'live' | 'replay';
+  /** Gráficos a dibujar (por defecto, los de la telemetría del control). */
+  plots?: PlotDef[];
+  /** Grupo de cursores sincronizados (por defecto según el modo). */
+  syncKey?: string;
   /** Cursor sobre los gráficos: tiempo [s] bajo el cursor, o null al salir. */
   onCursor?: (t: number | null) => void;
 }
@@ -94,7 +99,10 @@ export class Traces {
   private zoom: { min: number; max: number } | null = null;
   private playhead: number | null = null;
   private t: number[] = [];
-  private cols = new Map<FrameKey, Col>();
+  private readonly plots: PlotDef[];
+  private readonly syncKey: string;
+  private readonly capacity = RATE_HZ * MAX_SECONDS;
+  private cols = new Map<string, Col>();
   private markers: Marker[] = [];
   private charts: { def: PlotDef; u: uPlot; host: HTMLElement; values: HTMLElement[] }[] = [];
   private visibility = new Map<string, boolean>();
@@ -103,8 +111,10 @@ export class Traces {
   constructor(private root: HTMLElement, opts: TracesOptions = {}) {
     this.replay = opts.mode === 'replay';
     this.onCursor = opts.onCursor;
+    this.plots = opts.plots ?? PLOTS;
+    this.syncKey = opts.syncKey ?? (this.replay ? 'historial' : 'trazas');
     this.paused = this.replay;
-    for (const p of PLOTS) for (const s of p.series) {
+    for (const p of this.plots) for (const s of p.series) {
       this.cols.set(s.key, []);
       this.visibility.set(s.key, s.show !== false);
     }
@@ -114,16 +124,17 @@ export class Traces {
   }
 
   // ------------------------------------------------------------ datos
-  push(frames: Frame[]) {
+  /** Tramas con su tiempo `t` [ms]; cada serie toma el campo de su clave. */
+  push<F extends { t: number }>(frames: F[]) {
     for (const f of frames) {
       this.t.push(f.t / 1000);
       for (const [key, col] of this.cols) {
-        const v = f[key];
+        const v = (f as unknown as Record<string, unknown>)[key];
         col.push(typeof v === 'number' ? v : null);
       }
     }
-    if (this.t.length > CAPACITY + 250) {
-      const cut = this.t.length - CAPACITY;
+    if (this.t.length > this.capacity + 250) {
+      const cut = this.t.length - this.capacity;
       this.t.splice(0, cut);
       for (const col of this.cols.values()) col.splice(0, cut);
       this.markers = this.markers.filter((m) => m.t >= this.t[0]);
@@ -142,7 +153,7 @@ export class Traces {
   }
 
   /** Modo replay: carga una sesión completa. `t` en s; columnas por clave de trama. */
-  load(t: number[], cols: Partial<Record<FrameKey, Col>>) {
+  load(t: number[], cols: Partial<Record<string, Col>>) {
     this.t = t;
     for (const key of this.cols.keys()) this.cols.set(key, cols[key] ?? t.map(() => null));
     this.markers = [];
@@ -225,7 +236,7 @@ export class Traces {
     const w = Math.max(240, this.root.clientWidth - 8);
     if (fitsHeight() && this.root.clientHeight > 0) {
       // Reparte el alto del contenedor entre los cuatro gráficos (cabecera ~30 px cada uno)
-      const h = Math.floor((this.root.clientHeight - 12) / PLOTS.length) - 30;
+      const h = Math.floor((this.root.clientHeight - 12) / this.plots.length) - 30;
       return { width: w, height: Math.max(80, Math.min(240, h)) };
     }
     return { width: w, height: w < 600 ? 120 : 150 };
@@ -268,12 +279,12 @@ export class Traces {
     };
     const playColor = cssVar('--ink-2');
 
-    PLOTS.forEach((def, idx) => {
+    this.plots.forEach((def, idx) => {
       const host = document.createElement('div');
       host.className = 'plot';
       const head = document.createElement('div');
       head.className = 'plot-head';
-      head.innerHTML = `<div class="plot-title">${def.title}<span class="u">[${def.unit}]</span></div>`;
+      head.innerHTML = `<div class="plot-title">${def.title}${def.unit ? `<span class="u">[${def.unit}]</span>` : ''}</div>`;
       const legend = document.createElement('div');
       legend.className = 'legend';
       const values: HTMLElement[] = [];
@@ -309,7 +320,7 @@ export class Traces {
       const opts: uPlot.Options = {
         ...this.size(),
         cursor: {
-          sync: { key: this.replay ? 'historial' : 'trazas' },
+          sync: { key: this.syncKey },
           drag: { x: true, y: false, setScale: false },
         },
         scales: { x: { time: false, auto: false } },
@@ -330,9 +341,9 @@ export class Traces {
         ],
         axes: [
           {
-            stroke: ink3, font, size: idx === PLOTS.length - 1 ? 32 : 22,
+            stroke: ink3, font, size: idx === this.plots.length - 1 ? 32 : 22,
             grid: { stroke: grid, width: 1 }, ticks: { stroke: tick, width: 1, size: 4 },
-            values: idx === PLOTS.length - 1 ? undefined : () => [],
+            values: idx === this.plots.length - 1 ? undefined : () => [],
           },
           // Eje y: letra pequeña y marcas cada ≥ 18 px, para leer el rango aun en gráficos bajos
           { stroke: ink3, font: yFont, size: 44, space: 18, gap: 3, grid: { stroke: grid, width: 1 }, ticks: { stroke: tick, width: 1, size: 3 } },

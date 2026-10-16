@@ -61,6 +61,25 @@ class ParamSetRequest(BaseModel):
     overwrite: bool = False
 
 
+def capture_to_csv(c: dict) -> str:
+    """Muestras del ensayo y RPM de rueda por diferencia hacia adelante: la RPM de la fila k es
+    la del intervalo [k, k+1], en el que estuvo aplicado el PWM de la fila k."""
+    cpw = (c.get("enc") or {}).get("cpw") or 5236
+    rows = c["rows"]
+    out = [f"# ensayo {c['id']} · motor {c.get('motor')} · período {c.get('period_ms')} ms · "
+           f"tramos {json.dumps(c.get('seq'))} · {cpw:g} cuentas por vuelta de rueda",
+           "t_s,pwm_l,pwm_r,c_l,c_r,rpm_l,rpm_r"]
+    for k, (t, ul, ur, cl, cr) in enumerate(rows):
+        rpm = ["", ""]
+        if k + 1 < len(rows):
+            t2, _, _, cl2, cr2 = rows[k + 1]
+            dt = (t2 - t) * 1e-6
+            if dt > 0:
+                rpm = [f"{(cl2 - cl) / cpw / dt * 60:.3f}", f"{(cr2 - cr) / cpw / dt * 60:.3f}"]
+        out.append(f"{t * 1e-6:.6f},{ul},{ur},{cl},{cr},{rpm[0]},{rpm[1]}")
+    return "\n".join(out) + "\n"
+
+
 def create_app(db_path=None, web_dist=None, clave: str | None = None) -> FastAPI:
     """`clave`: None = la de settings (argumento --clave o BALANCIN_CLAVE); "" = sin clave."""
     secret = settings.clave if clave is None else clave
@@ -234,6 +253,41 @@ def create_app(db_path=None, web_dist=None, clave: str | None = None) -> FastAPI
     @app.get("/api/sessions/{session_id}/events")
     async def session_events(session_id: int):
         return await asyncio.to_thread(db.get_events, session_id)
+
+    # ------------------------------------------------------------ ensayos del banco de motores
+    @app.get("/api/captures")
+    async def captures(session_id: int | None = None, limit: int = 200):
+        return await asyncio.to_thread(db.list_captures, session_id, limit)
+
+    # Antes que /api/captures/{capture_id}, que si no tomaría «5.csv» como id
+    @app.get("/api/captures/{capture_id}.csv")
+    async def capture_csv(capture_id: int):
+        c = await asyncio.to_thread(db.get_capture, capture_id)
+        if not c:
+            raise HTTPException(404, "ensayo no encontrado")
+        return Response(capture_to_csv(c), media_type="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="balancin_ensayo{capture_id}.csv"'})
+
+    @app.get("/api/captures/{capture_id}")
+    async def capture(capture_id: int):
+        c = await asyncio.to_thread(db.get_capture, capture_id)
+        if not c:
+            raise HTTPException(404, "ensayo no encontrado")
+        return c
+
+    @app.patch("/api/captures/{capture_id}")
+    async def patch_capture(capture_id: int, body: SessionPatch):
+        if not await asyncio.to_thread(db.update_capture_notes, capture_id, body.notes):
+            raise HTTPException(404, "ensayo no encontrado")
+        await hub.broadcast({"type": "captures_changed", "id": capture_id})
+        return await asyncio.to_thread(db.get_capture, capture_id)
+
+    @app.delete("/api/captures/{capture_id}")
+    async def delete_capture(capture_id: int):
+        if not await asyncio.to_thread(db.delete_capture, capture_id):
+            raise HTTPException(404, "ensayo no encontrado")
+        await hub.broadcast({"type": "captures_changed", "id": capture_id})
+        return {"ok": True}
 
     # ------------------------------------------------------------ juegos de parámetros
     @app.get("/api/param-sets")

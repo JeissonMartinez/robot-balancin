@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.5.2"
+#define FW_VERSION "0.6.0"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -72,9 +72,16 @@ const ledc_timer_t TIMER_B = LEDC_TIMER_1;
 #define L_B 11
 // Motorreductor 25GA370-12V-100RPM con encoder, alimentado con LiPo 2S (8.4 V):
 // velocidad máxima esperada ≈ 100 · 8.4/12 ≈ 70 RPM en la rueda.
-const int CPR = 44;                          // Pulsos por vuelta del eje del motor
+// Los encoders se leen con el contador de pulsos por hardware (PCNT) en cuadratura x4:
+// cuenta los flancos de subida y de bajada de A y de B (ver encoders.h).
+const int ENC_PPR_MOTOR = 11;                // Pulsos por canal por vuelta del eje del motor (a verificar, M0)
+const int ENC_DECODE = 4;                    // Cuentas por pulso (x4)
+const int CPR = ENC_PPR_MOTOR * ENC_DECODE;  // Cuentas por vuelta del eje del motor
 const float GEAR_RATIO = 119.0f;             // Reducción de la caja
-const float PPR_WHEEL = CPR * GEAR_RATIO;    // Pulsos por vuelta de rueda
+const float PPR_WHEEL = CPR * GEAR_RATIO;    // Cuentas por vuelta de rueda
+// Filtro de glitches del PCNT: ignora pulsos más cortos que esto (máx. ≈ 12.7 µs). A 70 RPM
+// de rueda cada canal cambia cada ~330 µs y entre A y B pasan ~80 µs: 10 µs no pierde cuentas.
+const uint32_t ENC_GLITCH_NS = 10000;
 // Signo de cada encoder para que PWM > 0 (adelante) dé RPM > 0.
 // La telemetría mostró RPM negativas con PWM positivo; verificar girando cada rueda a mano.
 const int ENC_L_SIGN = -1;
@@ -82,6 +89,15 @@ const int ENC_R_SIGN = -1;
 // Encoder izquierdo defectuoso (no cuenta al girar la rueda a mano y mete picos de ruido
 // con los motores en marcha): la velocidad del robot se toma sólo de la rueda derecha.
 const bool USE_LEFT_ENCODER = false;
+
+// ===================== BANCO DE MOTORES (bench.h) ==============
+// Pruebas de lazo abierto de cada motor con el robot sobre un soporte (ruedas en el aire).
+const uint32_t BENCH_LIVE_MS = 20;           // Trama "mot" en vivo cada 20 ms (50 Hz)
+const size_t BENCH_MAX_SAMPLES = 5000;       // Muestras por ensayo (16 B c/u = 80 kB de RAM)
+const uint8_t BENCH_MAX_SEGMENTS = 16;       // Tramos [PWM, ms] por ensayo
+const uint32_t BENCH_MAX_PERIOD_MS = 20;     // Período de muestreo de un ensayo: 1..20 ms
+const uint32_t BENCH_MANUAL_TIMEOUT_MS = 30000; // El PWM manual se apaga si no se renueva
+const int BENCH_GET_MAX_ROWS = 200;          // Filas por respuesta al leer un ensayo
 
 // ===================== CONTROL ================================
 const uint32_t CONTROL_PERIOD_MS = 20;       // Periodo de TaskBalanceo (50 Hz)

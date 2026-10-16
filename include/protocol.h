@@ -13,6 +13,7 @@
 #pragma once
 #include <Arduino.h>
 #include "tasks_block.h"
+#include "bench.h"
 
 struct TelemetryOutput
 {
@@ -37,11 +38,14 @@ void protocolHandleLine(const char *line, Channel &ch);
 /** Escribe una trama de telemetría en JSON o en texto. */
 void protocolWriteTelemetry(const Telemetry &t, Print &out, bool json);
 
+/** Escribe una trama del banco de motores ("mot") en JSON o en texto. */
+void protocolWriteBench(const BenchFrame &f, Print &out, bool json);
+
 /** Escribe los parámetros activos (mensaje "params"). */
 void protocolWriteParams(Print &out);
 
-/** Calibración del MPU con el control en pausa. @return false si no se pudo pausar. */
+/** Calibración del MPU con el control en pausa. @return false si no se pudo pausar o el banco está activo. */
 bool runCalibration();
 
-/** Prueba de zona muerta con el control en pausa. @return false si no se pudo pausar. */
+/** Prueba de zona muerta con el control en pausa. @return false si no se pudo pausar o el banco está activo. */
 bool runDeadband();

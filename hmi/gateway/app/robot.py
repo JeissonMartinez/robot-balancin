@@ -9,6 +9,8 @@
   reconfigura la telemetría y abre otra.
 - Si la conexión se pierde y el transporte lo permite (WiFi), reintenta cada
   RECONNECT_S segundos hasta recuperarla o hasta que se pida desconectar.
+- Banco de motores (fw ≥ 0.6.0): reparte las tramas "mot" a la HMI y, cuando un ensayo
+  termina, lo descarga por partes ("bench" op "get"), lo guarda en SQLite y avisa.
 """
 from __future__ import annotations
 
@@ -25,11 +27,13 @@ log = logging.getLogger("robot")
 
 PROTOCOL_VERSION = 1
 # Comandos que la HMI puede enviar. `tel` no: la telemetría la administra el gateway.
-CLIENT_COMMANDS = {"hello", "get", "schema", "set", "defaults", "save", "calib", "deadband", "estop", "arm", "wifi", "mqtt"}
+CLIENT_COMMANDS = {"hello", "get", "schema", "set", "defaults", "save", "calib", "deadband", "estop", "arm", "wifi", "mqtt",
+                   "bench"}
 TIMEOUTS = {"save": 6.0, "calib": 8.0, "deadband": 40.0}
 DEFAULT_TIMEOUT = 2.0
 TICK = 0.1  # s, período del lazo de reparto
 RECONNECT_S = 2.0
+CAPTURE_CHUNK = 200  # filas por "get" del ensayo (BENCH_GET_MAX_ROWS en el firmware)
 
 
 class RobotLink:
@@ -54,6 +58,9 @@ class RobotLink:
         self._lock = asyncio.Lock()
         self._tel_db: list[tuple[float, dict]] = []
         self._tel_ws: list[dict] = []
+        self._mot_ws: list[dict] = []
+        self._cap_fetched: set[tuple[int | None, int]] = set()  # (sesión, id del ensayo en el robot)
+        self._cap_task: asyncio.Task | None = None
         self._events: list[tuple] = []
         self._frames = 0
         self._pump: asyncio.Task | None = None
@@ -71,6 +78,8 @@ class RobotLink:
             "fw": self.hello.get("fw") if self.hello else None,
             "proto": self.hello.get("proto") if self.hello else None,
             "params_src": self.hello.get("params_src") if self.hello else None,
+            "enc": self.hello.get("enc") if self.hello else None,  # fw ≥ 0.6.0
+            "bench": bool(self.hello.get("bench")) if self.hello else False,
             "session_id": self.session_id,
             "robot_state": self.robot_state,
             "rate": round(self.rate, 1),
@@ -131,6 +140,11 @@ class RobotLink:
                 await self._command_raw("tel", restore, timeout=0.5)
             except Exception:
                 pass
+        if self.state == "connected" and self.robot_state == "BENCH":
+            try:  # el banco sigue activo en el robot, pero sin PWM manual ni ensayo en curso
+                await self._command_raw("bench", {"op": "stop"}, timeout=0.5)
+            except Exception:
+                pass
         self._event("disconnect", {"target": self.transport.target})
         await self._teardown()
         await self._broadcast_status()
@@ -161,6 +175,10 @@ class RobotLink:
         self.robot_state = None
         self.last_seq = self.last_t = None
         self.rate = 0.0
+        self._mot_ws.clear()
+        if self._cap_task and not self._cap_task.done():
+            self._cap_task.cancel()
+        self._cap_task = None
 
     def _on_transport_closed(self, reason: str | None):
         asyncio.create_task(self._lost(reason or "conexión perdida"))
@@ -309,6 +327,8 @@ class RobotLink:
             kind = msg.get("type")
             if kind == "tel":
                 return self._on_tel(msg)
+            if kind == "mot":
+                return self._on_mot(msg)
             if kind == "ack":
                 entry = self._pending.get(msg.get("id"))
                 if entry and not entry[1].done():
@@ -348,6 +368,53 @@ class RobotLink:
         frame.pop("type", None)
         self._tel_ws.append(frame)
 
+    def _on_mot(self, msg: dict):
+        """Trama del banco de motores: no va a la tabla de telemetría (los datos del banco se
+        guardan como ensayos); cuenta para la tasa de recepción."""
+        self.last_t = msg.get("t")
+        self.robot_state = "BENCH"
+        self._frames += 1
+        frame = dict(msg)
+        frame.pop("type", None)
+        self._mot_ws.append(frame)
+        ci, cs = msg.get("ci"), msg.get("cs")
+        if cs in ("done", "aborted") and ci and (self.session_id, ci) not in self._cap_fetched:
+            if self._cap_task is None or self._cap_task.done():
+                self._cap_fetched.add((self.session_id, ci))
+                self._cap_task = asyncio.create_task(self._fetch_capture(ci))
+
+    async def _fetch_capture(self, ci: int):
+        """Descarga el ensayo `ci` del robot, lo guarda y avisa a la HMI."""
+        try:
+            async with self._lock:
+                status = (await self._command_raw("bench", {"op": "status"}))["bench"]
+                meta = status.get("cap") or {}
+                if meta.get("id") != ci or meta.get("st") not in ("done", "aborted"):
+                    return  # ya empezó otro ensayo: éste se perdió
+                rows: list = []
+                total = None
+                while total is None or len(rows) < total:
+                    ack = await self._command_raw("bench", {"op": "get", "from": len(rows), "count": CAPTURE_CHUNK},
+                                                  timeout=4.0)
+                    if not ack.get("ok") or ack.get("cap") != ci:
+                        raise RuntimeError(ack.get("err") or "el ensayo cambió mientras se leía")
+                    total = ack["total"]
+                    if not ack["rows"]:
+                        break
+                    rows.extend(ack["rows"])
+            enc = (self.hello or {}).get("enc")
+            fw = (self.hello or {}).get("fw")
+            db_id = await asyncio.to_thread(self.db.add_capture, self.session_id, fw, meta, enc, rows)
+            self._event("capture", {"id": db_id, "cap": ci, "state": meta.get("st"), "motor": meta.get("motor"),
+                                    "n": len(rows), "seq": meta.get("seq"), "period_ms": meta.get("period_ms")})
+            await self.hub.broadcast({"type": "captures_changed", "id": db_id})
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("no se pudo leer el ensayo %s: %s", ci, e)
+            self._cap_fetched.discard((self.session_id, ci))  # se reintenta con la próxima trama
+            self._event("capture_error", {"cap": ci, "err": str(e)})
+
     def record(self, kind: str, payload):
         """Evento originado fuera del enlace (p. ej. se guardó un juego de parámetros)."""
         self._event(kind, payload)
@@ -384,6 +451,9 @@ class RobotLink:
             if self._tel_ws:
                 frames, self._tel_ws = self._tel_ws, []
                 await self.hub.broadcast({"type": "tel", "frames": frames})
+            if self._mot_ws:
+                frames, self._mot_ws = self._mot_ws, []
+                await self.hub.broadcast({"type": "mot", "frames": frames})
             if tick % 5 == 0:
                 try:
                     await self._flush_db()

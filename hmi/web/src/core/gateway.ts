@@ -4,7 +4,8 @@
  * esta clase; nadie más abre sockets.
  */
 import type {
-  Ack, Frame, GwEvent, ParamDesc, Params, ParamSet, ServerMsg, Session, SessionColumns, Status, TelemetryRow,
+  Ack, Capture, Frame, GwEvent, MotFrame, ParamDesc, Params, ParamSet, ServerMsg, Session, SessionColumns, Status,
+  TelemetryRow,
 } from './protocol';
 
 interface EventMap {
@@ -13,6 +14,8 @@ interface EventMap {
   schema: ParamDesc[] | null;
   params: Params | null;
   frames: Frame[];
+  mot: MotFrame[];
+  capturesChanged: number;
   event: GwEvent;
   paramSetsChanged: void;
   sessionsChanged: void;
@@ -85,6 +88,12 @@ export class Gateway {
         break;
       case 'tel':
         this.emit('frames', msg.frames);
+        break;
+      case 'mot':
+        this.emit('mot', msg.frames);
+        break;
+      case 'captures_changed':
+        this.emit('capturesChanged', msg.id);
         break;
       case 'params':
         this.params = msg.params;
@@ -189,4 +198,9 @@ export const api = {
     request<TelemetryRow[]>('GET', `/api/sessions/${id}/telemetry?offset=${offset}&limit=${limit}`),
   sessionEvents: (id: number) => request<(GwEvent & { id: number })[]>('GET', `/api/sessions/${id}/events`),
   csvUrl: (id: number) => `/api/sessions/${id}/telemetry.csv`,
+  captures: () => request<Capture[]>('GET', '/api/captures'),
+  capture: (id: number) => request<Capture>('GET', `/api/captures/${id}`),
+  patchCapture: (id: number, notes: string) => request<Capture>('PATCH', `/api/captures/${id}`, { notes }),
+  deleteCapture: (id: number) => request<{ ok: boolean }>('DELETE', `/api/captures/${id}`),
+  captureCsvUrl: (id: number) => `/api/captures/${id}.csv`,
 };

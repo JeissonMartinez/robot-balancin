@@ -25,6 +25,7 @@ Firmware para un **robot balancín** (péndulo invertido sobre dos ruedas) basad
 - 🛑 **Parada de emergencia** remota.
 - 📶 **WiFi**: red propia `Balancin-XXXX` (clave única por robot) o red local, con WebSocket para la HMI; el control sigue solo en su núcleo.
 - 📡 **MQTT** opcional (`balancin/<robot>/in|out|status`) para usar un broker como Mosquitto.
+- 🧪 **Banco de motores** (fw 0.6.0): diagnóstico de cada encoder (cuentas, flancos por canal, sentido) y ensayos de lazo abierto de cada motor, desde la pestaña Motores de la HMI.
 
 ---
 
@@ -144,7 +145,8 @@ Los motorreductores (1:119) se comportan casi como fuentes de velocidad. Con el 
 | `mqtt_link.h/.cpp` | Canal MQTT opcional (esp-mqtt), configuración en NVS. |
 | `console.h/.cpp` | Salida de texto para humanos por Serial y WiFi a la vez. |
 | `protocol.h/.cpp` | Protocolo con la HMI: comandos JSON, respuestas y formato de telemetría (`docs/hmi/PROTOCOLO.md` (documentación interna)). |
-| `encoders.h/.cpp` | ISRs de encoders (IRAM-safe), lectura atómica y RPM filtradas. |
+| `encoders.h/.cpp` | Encoders con el contador por hardware (PCNT) en cuadratura x4 y filtro de glitches; RPM filtradas; flancos por canal y nivel de los pines para el diagnóstico. |
+| `bench.h/.cpp` | Banco de motores: con el control en pausa, PWM manual por motor y ensayos de tramos `[PWM, ms]` muestreados cada 1–20 ms en RAM. |
 | `motors.h/.cpp` | PWM LEDC, driver TB6612FNG y compensación de zona muerta. |
 | `mpu_block.h/.cpp` | MPU6050: conexión, filtro pasa-bajas, calibración en NVS y filtro complementario. |
 | `nn_cascade_block.h/.cpp` | Red neuronal, las dos estructuras de control y sus ganancias. |
@@ -239,6 +241,7 @@ Escribe la letra en el monitor (no hace falta Enter):
 | `a` | Liberar la parada de emergencia. |
 | `p` | Mostrar los parámetros activos (JSON). |
 | `w` | Estado del WiFi: red, clave, dirección. |
+| `b` | Entrar o salir del banco de motores (robot sobre un soporte, ruedas en el aire). Al salir queda la parada de emergencia activa. |
 | `?` | Ayuda. |
 
 `d` y `c` pausan el control antes de actuar. Al terminar, el control se reactiva cuando el robot se pone vertical.
@@ -256,6 +259,7 @@ pio run -t upload
 pio device monitor
 ```
 
+- La plataforma está fija en `espressif32@6.12.0` (Arduino 2.0.17, ESP-IDF 4.4), la que usa el firmware. Sin versión, PlatformIO puede tomar pioarduino (Arduino 3), con la que no compila.
 - Si la carga falla con `Wrong boot mode`, mantén pulsado **BOOT** al empezar la carga (hasta que aparezca `Connecting...` seguido de `Writing`).
 - Las librerías **Neural_Networks_FF** y **Dynamic_Array** están en `lib/` y PlatformIO las detecta automáticamente. MPU6050 y ArduinoJson se descargan desde `lib_deps`.
 - El monitor usa 921600 baudios (`monitor_speed` en `platformio.ini` = `SERIAL_BAUD` en `config.h`).

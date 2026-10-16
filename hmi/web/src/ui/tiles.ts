@@ -1,11 +1,12 @@
 /** Cifras de cabecera con la última trama. Se refrescan a 5 Hz para que se puedan leer. */
 import type { Gateway } from '../core/gateway';
-import type { Frame, RobotState } from '../core/protocol';
+import type { Frame, MotFrame, RobotState } from '../core/protocol';
 
 const STATE: Record<RobotState, [string, string]> = {
   ACTIVE: ['Controlando', 'ok'],
   IDLE: ['Motores off', 'info'],
   ESTOP: ['Parada', 'mal'],
+  BENCH: ['Banco', 'warn'],
 };
 
 const fmt = (v: number | undefined, d: number) => (v === undefined || v === null || !isFinite(v) ? '—' : v.toFixed(d));
@@ -21,14 +22,34 @@ export function setupTiles(root: HTMLElement, gw: Gateway) {
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
   let last: Frame | null = null;
+  let lastMot: MotFrame | null = null; // banco de motores: manda sobre la telemetría del control
 
-  gw.on('frames', (fs) => (last = fs[fs.length - 1] ?? last));
+  gw.on('frames', (fs) => {
+    last = fs[fs.length - 1] ?? last;
+    if (fs.length) lastMot = null;
+  });
+  gw.on('mot', (fs) => (lastMot = fs[fs.length - 1] ?? lastMot));
   gw.on('status', (s) => {
-    if (s.state !== 'connected') last = null;
+    if (s.state !== 'connected') last = lastMot = null;
     $('tRate').textContent = s.state !== 'connected' ? '— Hz' : `${s.rate.toFixed(1)} Hz` + (s.gaps ? ` · ${s.gaps} perdidas` : '');
   });
 
   setInterval(() => {
+    if (lastMot) {
+      const m = lastMot;
+      const [label, cls] = STATE.BENCH;
+      $('tEstado').innerHTML = `<span class="pill ${m.es ? 'mal' : cls} tile-pill">${m.es ? 'Banco · parada' : label}</span>`;
+      $('tEstadoF').textContent = m.cs === 'running' ? `ensayo ${m.ci}: ${m.ck}/${m.cn}` : `trama ${m.seq}`;
+      $('tAng').innerHTML = '—';
+      $('tRef').textContent = 'control en pausa';
+      $('tPwm').innerHTML = `${m.pwmL}<small> · </small>${m.pwmR}`;
+      $('tPwmM').textContent = 'izquierda · derecha';
+      $('tKp').textContent = '—';
+      $('tW').textContent = 'ω —';
+      $('tRpm').innerHTML = `${fmt(m.rpmL, 1)}<small> · </small>${fmt(m.rpmR, 1)}`;
+      $('tDt').innerHTML = '1<small> ms</small>';
+      return;
+    }
     if (!last) {
       $('tEstado').innerHTML = '—';
       $('tEstadoF').textContent = 'sin datos';

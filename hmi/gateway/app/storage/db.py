@@ -5,6 +5,8 @@ Tablas (docs/hmi/PLAN.md §5):
 - telemetry:  una fila por trama, columnas con los campos del protocolo.
 - events:     comandos, respuestas, cambios de parámetros y logs del robot.
 - param_sets: juegos de parámetros con nombre (se usa desde F2).
+- captures:   ensayos del banco de motores (fw ≥ 0.6.0): tramos de PWM y muestras
+              [t_us, pwmL, pwmR, cL, cR] tal como las mide el robot.
 
 Todas las funciones son síncronas y seguras entre hilos (un lock); el gateway las
 llama con asyncio.to_thread para no frenar el event loop.
@@ -64,6 +66,22 @@ CREATE TABLE IF NOT EXISTS param_sets (
     fw          TEXT,
     params_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS captures (
+    id          INTEGER PRIMARY KEY,
+    session_id  INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL,
+    fw          TEXT,
+    cap_id      INTEGER,
+    state       TEXT,
+    motor       TEXT,
+    period_ms   INTEGER,
+    seq_json    TEXT,
+    enc_json    TEXT,
+    n           INTEGER,
+    rows_json   TEXT NOT NULL,
+    notes       TEXT
+);
+CREATE INDEX IF NOT EXISTS captures_session ON captures(session_id);
 """
 
 
@@ -227,6 +245,46 @@ class Database:
             out.append(d)
         return out
 
+    # ---------------------------------------------------------------- ensayos del banco
+    def add_capture(self, session_id: int | None, fw: str | None, meta: dict, enc: dict | None,
+                    rows: list[list[int]]) -> int:
+        """`meta`: el objeto `cap` del estado del banco (id, st, motor, period_ms, seq)."""
+        with self._lock:
+            cur = self._con.execute(
+                "INSERT INTO captures(session_id, created_at, fw, cap_id, state, motor, period_ms, seq_json, enc_json,"
+                " n, rows_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (session_id, now_iso(), fw, meta.get("id"), meta.get("st"), meta.get("motor"), meta.get("period_ms"),
+                 json.dumps(meta.get("seq")), json.dumps(enc) if enc else None, len(rows), json.dumps(rows)),
+            )
+            self._con.commit()
+            return cur.lastrowid
+
+    def list_captures(self, session_id: int | None = None, limit: int = 200) -> list[dict]:
+        sql = f"SELECT {_CAPTURE_META} FROM captures"
+        args: tuple = ()
+        if session_id is not None:
+            sql += " WHERE session_id=?"
+            args = (session_id,)
+        with self._lock:
+            rows = self._con.execute(sql + " ORDER BY id DESC LIMIT ?", (*args, limit)).fetchall()
+        return [_capture_dict(r) for r in rows]
+
+    def get_capture(self, capture_id: int) -> dict | None:
+        with self._lock:
+            r = self._con.execute("SELECT * FROM captures WHERE id=?", (capture_id,)).fetchone()
+        return _capture_dict(r) if r else None
+
+    def update_capture_notes(self, capture_id: int, notes: str | None) -> bool:
+        with self._lock:
+            n = self._con.execute("UPDATE captures SET notes=? WHERE id=?", (notes, capture_id)).rowcount
+            self._con.commit()
+        return n > 0
+
+    def delete_capture(self, capture_id: int) -> bool:
+        with self._lock:
+            n = self._con.execute("DELETE FROM captures WHERE id=?", (capture_id,)).rowcount
+            self._con.commit()
+        return n > 0
 
     # ---------------------------------------------------------------- juegos de parámetros
     def list_param_sets(self) -> list[dict]:
@@ -264,6 +322,19 @@ class Database:
             n = self._con.execute("DELETE FROM param_sets WHERE id=?", (set_id,)).rowcount
             self._con.commit()
         return n > 0
+
+
+# Columnas de un ensayo sin las muestras (para listarlos)
+_CAPTURE_META = "id, session_id, created_at, fw, cap_id, state, motor, period_ms, seq_json, enc_json, n, notes"
+
+
+def _capture_dict(r: sqlite3.Row) -> dict:
+    d = dict(r)
+    d["seq"] = json.loads(d.pop("seq_json")) if d.get("seq_json") else None
+    d["enc"] = json.loads(d.pop("enc_json")) if d.get("enc_json") else None
+    if "rows_json" in d:
+        d["rows"] = json.loads(d.pop("rows_json"))
+    return d
 
 
 def _param_set_dict(r: sqlite3.Row) -> dict:

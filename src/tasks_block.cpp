@@ -12,7 +12,7 @@ static TaskHandle_t taskBalHandle = NULL;
 static QueueHandle_t telemetryQueue = NULL;
 static const UBaseType_t TELEMETRY_QUEUE_LEN = 25; // 0.5 s a 50 Hz
 
-static std::atomic<bool> pauseRequested(false);
+static std::atomic<int> pauseRequests(0); // pausas pedidas y no liberadas (banco + comandos)
 static std::atomic<bool> paused(false);
 static std::atomic<bool> estop(false);
 static std::atomic<uint32_t> dropped(0);
@@ -36,7 +36,7 @@ static void TaskBalanceo(void *pvParameters)
   while (true)
   {
     // --- Pausa segura (calibración): se atiende al inicio del ciclo, sin I2C en curso ---
-    if (pauseRequested.load())
+    if (pauseRequests.load() > 0)
     {
       if (!wasPaused)
       {
@@ -133,7 +133,7 @@ void startControlTask()
 
 bool pauseControl(uint32_t timeoutMs)
 {
-  pauseRequested.store(true);
+  pauseRequests.fetch_add(1);
   uint32_t start = millis();
   while (!paused.load())
   {
@@ -146,7 +146,9 @@ bool pauseControl(uint32_t timeoutMs)
 
 void resumeControl()
 {
-  pauseRequested.store(false);
+  int n = pauseRequests.load();
+  while (n > 0 && !pauseRequests.compare_exchange_weak(n, n - 1))
+    ;
 }
 
 bool runWithControlPaused(void (*action)())

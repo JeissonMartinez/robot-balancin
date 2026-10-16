@@ -11,6 +11,7 @@
 #include "console.h"
 #include "wifi_link.h"
 #include "mqtt_link.h"
+#include "bench.h"
 
 // Devuelve true una vez por pulsación: LOW estable BTN_DEBOUNCE_MS y luego soltado.
 static bool calibrationButtonPressed()
@@ -40,14 +41,19 @@ static void printHelp()
   Console.println("  a  liberar la parada de emergencia");
   Console.println("  p  mostrar los parámetros activos (JSON)");
   Console.println("  w  estado del WiFi (red, clave, dirección)");
+  Console.println("  b  entrar / salir del banco de motores (robot sobre un soporte)");
   Console.println("  ?  esta ayuda");
   Console.println("Las líneas que empiezan con '{' son comandos JSON (docs/hmi/PROTOCOLO.md).");
 }
 
 static void reportPaused(bool ok)
 {
-  Console.println(ok ? ">> Control reanudado (se activa al poner el robot vertical)."
-                    : ">> ERROR: la tarea de control no se detuvo. Acción cancelada.");
+  if (ok)
+    Console.println(">> Control reanudado (se activa al poner el robot vertical).");
+  else if (benchActive())
+    Console.println(">> El banco de motores está activo: salir con 'b' antes de esta acción.");
+  else
+    Console.println(">> ERROR: la tarea de control no se detuvo. Acción cancelada.");
 }
 
 static void handleKey(char cmd)
@@ -93,6 +99,17 @@ static void handleKey(char cmd)
   case 'w':
   case 'W':
     wifiPrintInfo(Console);
+    break;
+  case 'b':
+  case 'B':
+    if (benchActive())
+      benchExit();
+    else
+    {
+      String err;
+      if (!benchEnter(err))
+        Console.printf(">> ERROR: %s\n", err.c_str());
+    }
     break;
   case '?':
   case 'h':
@@ -165,6 +182,17 @@ static void pumpTelemetry()
     if (m.tel.enabled && t.seq % m.tel.div == 0 && mqttCanSend())
       protocolWriteTelemetry(t, m.out, m.tel.json);
   }
+  // Banco de motores: mismas salidas y decimación que la telemetría
+  BenchFrame f;
+  while (receiveBenchFrame(f))
+  {
+    if (s.enabled && f.seq % s.div == 0)
+      protocolWriteBench(f, Serial, s.json);
+    if (w.tel.enabled && f.seq % w.tel.div == 0 && wifiHasClients() && wifiCanSend())
+      protocolWriteBench(f, w.out, w.tel.json);
+    if (m.tel.enabled && f.seq % m.tel.div == 0 && mqttCanSend())
+      protocolWriteBench(f, m.out, m.tel.json);
+  }
 }
 
 void setup()
@@ -196,6 +224,7 @@ void setup()
   resetAngleFromAccel();
 
   startControlTask();
+  benchInit();
   wifiInit();
   mqttInit();
 
@@ -222,5 +251,6 @@ void loop()
   wifiLoop();
   mqttLoop();
   pumpTelemetry();
+  benchLoop();
   delay(5);
 }

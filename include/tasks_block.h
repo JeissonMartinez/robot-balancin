@@ -17,7 +17,9 @@
  *
  * Pausa: pauseControl() pide a la tarea que se detenga al final de su ciclo (sin
  * suspenderla en medio de una transacción I2C) y espera la confirmación;
- * resumeControl() la reanuda re-sincronizando ángulo y estado.
+ * resumeControl() la reanuda re-sincronizando ángulo y estado. Las pausas se cuentan:
+ * la tarea sigue detenida mientras quede alguna sin liberar (p. ej. el banco de motores
+ * mantiene la suya mientras otro comando guarda en NVS).
  */
 #pragma once
 #include <Arduino.h>
@@ -51,11 +53,12 @@ void startControlTask();
 
 /**
  * @brief Detiene el control y los motores y espera a que la tarea confirme.
+ *        Cada llamada debe liberarse con resumeControl(), también si devuelve false.
  * @return true si la tarea quedó en pausa antes de timeoutMs.
  */
 bool pauseControl(uint32_t timeoutMs = 500);
 
-/** Reanuda el control (queda desactivado hasta que el robot esté vertical). */
+/** Libera una pausa; con todas liberadas el control se reanuda (desactivado hasta que el robot esté vertical). */
 void resumeControl();
 
 /**

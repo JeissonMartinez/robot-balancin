@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "bench.h"
 #include "config.h"
 #include "motor_test.h"
 #include "mpu_block.h"
@@ -26,12 +27,12 @@ static void calibrateAction()
 
 bool runCalibration()
 {
-  return runWithControlPaused(calibrateAction);
+  return !benchActive() && runWithControlPaused(calibrateAction);
 }
 
 bool runDeadband()
 {
-  return runWithControlPaused(runDeadbandTest);
+  return !benchActive() && runWithControlPaused(runDeadbandTest);
 }
 
 static bool saveResult = false;
@@ -54,6 +55,12 @@ void protocolHello(Print &out)
   doc["period_ms"] = CONTROL_PERIOD_MS;
   doc["structure"] = structureName(p.structure);
   doc["params_src"] = paramsLoadedFromNvs() ? "nvs" : "factory";
+  JsonObject enc = doc["enc"].to<JsonObject>();
+  enc["ppr"] = ENC_PPR_MOTOR;
+  enc["decode"] = ENC_DECODE;
+  enc["gear"] = GEAR_RATIO;
+  enc["cpw"] = PPR_WHEEL;
+  doc["bench"] = true;
   send(doc, out);
 }
 
@@ -83,6 +90,29 @@ void protocolWriteTelemetry(const Telemetry &t, Print &out, bool json)
                  "Ang: %.2f | Ref: %.2f | w: %.1f | PWM: %.1f | RPM L: %.1f | RPM R: %.1f | Kp: %.2f | dt: %.4f | %s\n",
                  t.angle, t.angleRef, t.rate, t.pwm, t.rpmL, t.rpmR, t.kp, t.dt,
                  t.state == RobotState::Active ? "ACTIVO" : (t.state == RobotState::EStop ? "PARADA DE EMERGENCIA" : "MOTORES OFF"));
+  if (n > 0)
+    out.write((const uint8_t *)buf, min(n, (int)sizeof(buf) - 1));
+}
+
+void protocolWriteBench(const BenchFrame &f, Print &out, bool json)
+{
+  char buf[360];
+  int n;
+  if (json)
+    n = snprintf(buf, sizeof(buf),
+                 "{\"type\":\"mot\",\"seq\":%lu,\"t\":%lu,\"pwmL\":%d,\"pwmR\":%d,\"cL\":%ld,\"cR\":%ld,"
+                 "\"rpmL\":%.2f,\"rpmR\":%.2f,\"eLA\":%lu,\"eLB\":%lu,\"eRA\":%lu,\"eRB\":%lu,\"lv\":%u,\"es\":%d,"
+                 "\"cs\":\"%s\",\"ci\":%u,\"ck\":%lu,\"cn\":%lu}\n",
+                 (unsigned long)f.seq, (unsigned long)f.tMs, f.pwmL, f.pwmR, (long)f.cL, (long)f.cR, f.rpmL, f.rpmR,
+                 (unsigned long)f.edges[0], (unsigned long)f.edges[1], (unsigned long)f.edges[2],
+                 (unsigned long)f.edges[3], f.levels, f.estop ? 1 : 0, benchCapStateName(f.capState), f.capId,
+                 (unsigned long)f.capCount, (unsigned long)f.capTotal);
+  else
+    n = snprintf(buf, sizeof(buf),
+                 "Banco | PWM L %d R %d | RPM L %.1f R %.1f | cuentas L %ld R %ld | flancos A/B L %lu/%lu R %lu/%lu | AB L %d%d R %d%d\n",
+                 f.pwmL, f.pwmR, f.rpmL, f.rpmR, (long)f.cL, (long)f.cR, (unsigned long)f.edges[0],
+                 (unsigned long)f.edges[1], (unsigned long)f.edges[2], (unsigned long)f.edges[3], f.levels & 1,
+                 (f.levels >> 1) & 1, (f.levels >> 2) & 1, (f.levels >> 3) & 1);
   if (n > 0)
     out.write((const uint8_t *)buf, min(n, (int)sizeof(buf) - 1));
 }
@@ -190,6 +220,108 @@ static void handleMqtt(JsonDocument &in, Print &out, JsonVariantConst id)
   send(doc, out);
 }
 
+static void ackBench(Print &out, JsonVariantConst id)
+{
+  JsonDocument doc;
+  doc["type"] = "ack";
+  doc["id"] = id;
+  doc["ok"] = true;
+  benchStatusJson(doc["bench"].to<JsonObject>());
+  send(doc, out);
+}
+
+// Entero opcional: `def` si falta; false si está pero no es entero
+static bool optInt(JsonDocument &in, const char *key, int def, int &out)
+{
+  if (in[key].isNull())
+  {
+    out = def;
+    return true;
+  }
+  if (!in[key].is<int>())
+    return false;
+  out = in[key].as<int>();
+  return true;
+}
+
+static void handleBench(JsonDocument &in, Print &out, JsonVariantConst id)
+{
+  const char *op = in["op"] | "status";
+  String err;
+  if (strcmp(op, "status") == 0)
+    return ackBench(out, id);
+  if (strcmp(op, "on") == 0)
+    return benchEnter(err) ? ackBench(out, id) : ack(out, id, false, err);
+  if (strcmp(op, "off") == 0)
+  {
+    benchExit();
+    return ackBench(out, id);
+  }
+  if (strcmp(op, "stop") == 0)
+  {
+    benchStop();
+    return ackBench(out, id);
+  }
+  if (strcmp(op, "pwm") == 0)
+  {
+    JsonDocument st;
+    benchStatusJson(st.to<JsonObject>());
+    int l, r;
+    if (!optInt(in, "l", st["pwm"][0] | 0, l) || !optInt(in, "r", st["pwm"][1] | 0, r))
+      return ack(out, id, false, "l y r deben ser enteros");
+    return benchSetPwm(l, r, err) ? ackBench(out, id) : ack(out, id, false, err);
+  }
+  if (strcmp(op, "run") == 0)
+  {
+    const char *motor = in["motor"] | "";
+    uint8_t mask = strcmp(motor, "L") == 0 ? 1 : strcmp(motor, "R") == 0 ? 2 : strcmp(motor, "LR") == 0 ? 3 : 0;
+    if (!in["seq"].is<JsonArrayConst>())
+      return ack(out, id, false, "seq debe ser una lista de [pwm, ms]");
+    JsonArrayConst seq = in["seq"].as<JsonArrayConst>();
+    if (seq.size() > BENCH_MAX_SEGMENTS)
+      return ack(out, id, false, String("seq admite hasta ") + BENCH_MAX_SEGMENTS + " tramos");
+    int16_t pwm[BENCH_MAX_SEGMENTS];
+    uint32_t ms[BENCH_MAX_SEGMENTS];
+    uint8_t n = 0;
+    for (JsonVariantConst s : seq)
+    {
+      if (!s.is<JsonArrayConst>() || s.size() != 2 || !s[0].is<int>() || !s[1].is<int>())
+        return ack(out, id, false, "cada tramo debe ser [pwm, ms] con enteros");
+      int p = s[0].as<int>(), d = s[1].as<int>();
+      if (p < -255 || p > 255 || d < 1)
+        return ack(out, id, false, "tramo fuera de rango: pwm en [-255, 255], ms ≥ 1");
+      pwm[n] = p;
+      ms[n] = d;
+      n++;
+    }
+    int period;
+    if (!optInt(in, "period_ms", 2, period) || period < 1)
+      return ack(out, id, false, "period_ms debe ser entero positivo");
+    return benchRun(mask, pwm, ms, n, period, err) ? ackBench(out, id) : ack(out, id, false, err);
+  }
+  if (strcmp(op, "get") == 0)
+  {
+    int from, count;
+    if (!optInt(in, "from", 0, from) || !optInt(in, "count", 100, count) || from < 0 || count < 1 ||
+        count > BENCH_GET_MAX_ROWS)
+      return ack(out, id, false, String("from ≥ 0 y count en [1, ") + BENCH_GET_MAX_ROWS + "]");
+    const uint32_t total = benchReadableSamples();
+    if (!total)
+      return ack(out, id, false, "no hay un ensayo terminado para leer");
+    // A mano: hasta 200 filas no conviene armarlas en un JsonDocument
+    JsonDocument st;
+    benchStatusJson(st.to<JsonObject>());
+    out.print("{\"type\":\"ack\",\"id\":");
+    serializeJson(id, out);
+    out.printf(",\"ok\":true,\"cap\":%u,\"from\":%d,\"total\":%lu,\"rows\":[", (unsigned)(st["cap"]["id"] | 0),
+               from, (unsigned long)total);
+    benchWriteRows(out, from, count);
+    out.print("]}\n");
+    return;
+  }
+  ack(out, id, false, String("op desconocida: ") + op);
+}
+
 void protocolHandleLine(const char *line, Channel &ch)
 {
   Print &out = ch.out;
@@ -241,6 +373,8 @@ void protocolHandleLine(const char *line, Channel &ch)
       return ack(out, id, false, "la tarea de control no se detuvo");
     return saveResult ? ack(out, id, true) : ack(out, id, false, "no se pudo escribir en NVS");
   }
+  if ((strcmp(cmd, "calib") == 0 || strcmp(cmd, "deadband") == 0) && benchActive())
+    return ack(out, id, false, "el banco de motores está activo: salir del banco primero");
   if (strcmp(cmd, "calib") == 0)
     return runCalibration() ? ack(out, id, true) : ack(out, id, false, "la tarea de control no se detuvo");
   if (strcmp(cmd, "deadband") == 0)
@@ -261,6 +395,8 @@ void protocolHandleLine(const char *line, Channel &ch)
     return handleWifi(in, out, id);
   if (strcmp(cmd, "mqtt") == 0)
     return handleMqtt(in, out, id);
+  if (strcmp(cmd, "bench") == 0)
+    return handleBench(in, out, id);
 
   ack(out, id, false, String("comando desconocido: ") + cmd);
 }

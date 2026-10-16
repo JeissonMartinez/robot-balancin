@@ -14,6 +14,7 @@ import random
 from pathlib import Path
 
 from .base import CloseHandler, LineHandler, Transport
+from .demo_bench import ENC, GET_MAX_ROWS, SimBench
 
 SCHEMA = json.loads((Path(__file__).with_name("demo_schema.json")).read_text(encoding="utf-8"))
 PERIOD = 0.02
@@ -111,6 +112,7 @@ class DemoTransport(Transport):
                      "ap_pass": "bal-000000", "ap_pass_default": True, "ssid": "", "pass_set": False,
                      "ip": "192.168.4.1", "clients": 0}
         self.mqtt = {"enabled": False, "host": "", "port": 1883, "connected": False, "topic": "balancin/balancin-demo"}
+        self.bench = SimBench()
         self._task: asyncio.Task | None = None
         self._on_line: LineHandler | None = None
 
@@ -140,7 +142,7 @@ class DemoTransport(Transport):
 
     def _hello(self):
         self._emit({"type": "hello", "fw": FW, "proto": 1, "period_ms": 20,
-                    "structure": self.params["structure"], "params_src": "factory"})
+                    "structure": self.params["structure"], "params_src": "factory", "enc": ENC, "bench": True})
 
     # ------------------------------------------------------------------ simulación
     async def _run(self):
@@ -150,8 +152,22 @@ class DemoTransport(Transport):
         sim = SimRobot(self.params)
         seq = 0
         t0 = next_t = loop.time()
+        reported = (0, 0)
         while True:
             next_t += PERIOD
+            if self.bench.on:
+                self._bench_period(loop.time() - t0)
+                if self.bench.manual_expired:
+                    self.bench.manual_expired = False
+                    self._emit(">> Banco: PWM manual apagado (no se renovó en 30 s).")
+                b = self.bench
+                if b.cap_state in (2, 3) and (b.cap_id, b.cap_state) != reported:
+                    reported = (b.cap_id, b.cap_state)
+                    self._emit(f">> Banco: ensayo {b.cap_id} {'terminado' if b.cap_state == 2 else 'abortado'} "
+                               f"({len(b.cap_rows)} muestras).")
+                await asyncio.sleep(max(0.0, next_t - loop.time()))
+                continue
+            self.bench.idle(int(PERIOD * 1000))
             fields, fell = sim.step(self.params, self.estop)
             if fell:
                 self._emit(">> Robot caído (simulado).")
@@ -163,6 +179,55 @@ class DemoTransport(Transport):
                     self._emit(f"Ang: {frame['ang']:.2f} | Ref: {frame['ref']:.2f} | PWM: {frame['pwm']:.1f} | demo")
             seq += 1
             await asyncio.sleep(max(0.0, next_t - loop.time()))
+
+    def _bench_period(self, t_s: float):
+        for _ in range(int(PERIOD * 1000)):
+            f = self.bench.tick(self.estop)
+            if f is None:
+                continue
+            f["t"] = int(t_s * 1000)
+            if self.tel["on"] and f["seq"] % self.tel["div"] == 0:
+                if self.tel["json"]:
+                    self._emit(f)
+                else:
+                    self._emit(f"Banco | PWM L {f['pwmL']} R {f['pwmR']} | RPM L {f['rpmL']:.1f} R {f['rpmR']:.1f} | demo")
+
+    def _bench_cmd(self, mid, msg: dict):
+        b, op = self.bench, msg.get("op", "status")
+        if op == "status":
+            pass
+        elif op == "on":
+            b.enter()
+            self._emit(">> Banco de motores activo: control en pausa. El robot debe estar sobre un soporte.")
+        elif op == "off":
+            if b.on:
+                b.exit()
+                self.estop = True
+                self._emit(">> Banco de motores cerrado. Parada de emergencia activa: Armar para volver al control.")
+        elif op == "stop":
+            b.stop()
+        elif op == "pwm":
+            l, r = msg.get("l", b.manual[0]), msg.get("r", b.manual[1])
+            if not all(isinstance(v, int) and not isinstance(v, bool) for v in (l, r)):
+                return self._ack(mid, False, "l y r deben ser enteros")
+            err = b.set_pwm(l, r, self.estop)
+            if err:
+                return self._ack(mid, False, err)
+        elif op == "run":
+            err = b.run(msg.get("motor", ""), msg.get("seq"), msg.get("period_ms", 2), self.estop)
+            if err:
+                return self._ack(mid, False, err)
+        elif op == "get":
+            frm, count = msg.get("from", 0), msg.get("count", 100)
+            if not (isinstance(frm, int) and isinstance(count, int) and frm >= 0 and 1 <= count <= GET_MAX_ROWS):
+                return self._ack(mid, False, f"from ≥ 0 y count en [1, {GET_MAX_ROWS}]")
+            n = b.readable()
+            if not n:
+                return self._ack(mid, False, "no hay un ensayo terminado para leer")
+            return self._ack(mid, True, cap=b.cap_id, total=n, **{"from": frm}, rows=b.cap_rows[frm:frm + count])
+        else:
+            return self._ack(mid, False, f"op desconocida: {op}")
+        self._ack(mid, True, bench=b.status(self.estop))
 
     # ------------------------------------------------------------------ comandos
     async def send(self, line: str) -> None:
@@ -191,6 +256,10 @@ class DemoTransport(Transport):
         if cmd == "defaults":
             self.params = {d["key"]: d["def"] for d in SCHEMA}
             return self._ack(mid, True, params=dict(self.params))
+        if cmd == "bench":
+            return self._bench_cmd(mid, msg)
+        if cmd in ("calib", "deadband") and self.bench.on:
+            return self._ack(mid, False, "el banco de motores está activo: salir del banco primero")
         if cmd in ("save", "calib", "deadband"):
             self._emit(f">> {cmd} (simulado)")
             await asyncio.sleep(0.3)

@@ -108,8 +108,8 @@ Verificar el protocolo por WiFi: `hmi/gateway/.venv/bin/python hmi/tools/protoco
 - **Parada de emergencia**: botón rojo o tecla `Esc` (en el PC).
 - **Clave de acceso** (opcional): con `--clave` la HMI la pide una vez por equipo (se recuerda 30
   días; **Salir**, al pie, la olvida). Sin clave, cualquiera en la red puede mover el robot.
-- **Celular**: barra de Seguridad fija arriba y cuatro pestañas abajo (En vivo, Historial, Ajustes,
-  Conexión). Se puede **agregar a la pantalla de inicio** (Safari: Compartir → Agregar a inicio;
+- **Celular**: barra de Seguridad fija arriba y cinco pestañas abajo (En vivo, Historial, Motores,
+  Ajustes, Conexión). Se puede **agregar a la pantalla de inicio** (Safari: Compartir → Agregar a inicio;
   Chrome: menú → Instalar app) y se abre como una app, sin la barra del navegador.
 - **Parámetros**: con **En vivo** cada cambio se envía al soltar el slider o confirmar el número
   (Enter). Sin **En vivo** los cambios se acumulan (borde dorado) y se envían juntos con
@@ -197,6 +197,7 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | `plots/` | Trazas con uPlot y leyenda propia; modo en vivo (ventana de 5–60 s) y modo reproducción (sesión completa, cabezal, cursor sincronizado con la escena) |
 | `scene/` | Escena del robot portada del Simulador_Balancin: `scene.ts` (2D y 3D en canvas), `pose.ts` (telemetría → pose; integra la posición desde las RPM), `geometry.ts` (medidas del robot para dibujarlo) |
 | `ui/history.ts` | Historial: lista de sesiones, gráficas reproducibles, tabla paginada, eventos, CSV, notas y borrado |
+| `ui/motors.ts` | Motores: banco de motores, PWM manual, ensayos, diagnóstico de encoders y trazas de cada rueda |
 | `styles/` | `tokens.css` (colores del Simulador_Balancin + paleta de series), `base.css`, `layout.css` |
 
 ### Estructura de `gateway/app`
@@ -206,8 +207,8 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | `main.py` | Rutas REST y WebSocket; sirve `web/dist` si existe |
 | `robot.py` | `RobotLink`: configuración del robot, comandos con ack, sesiones, reparto de telemetría |
 | `hub.py` | Clientes WebSocket conectados |
-| `transports/` | `serial_port.py`, `websocket.py` (WiFi), `mqtt.py`, `demo.py` (robot simulado) |
-| `storage/db.py` | SQLite: sesiones, telemetría, eventos, juegos de parámetros |
+| `transports/` | `serial_port.py`, `websocket.py` (WiFi), `mqtt.py`, `demo.py` y `demo_bench.py` (robot simulado, con banco de motores) |
+| `storage/db.py` | SQLite: sesiones, telemetría, eventos, juegos de parámetros, ensayos del banco |
 
 ### Tamaños de pantalla
 
@@ -217,7 +218,7 @@ Probados: escritorio (1440 × 860), iPad mini horizontal (1133 × 690) y vertica
 |---|---|
 | > 1080 px | La página ocupa el alto de la pantalla y no se desplaza. Izquierda (monitoreo): cifras y la vista con pestañas **En vivo** (escena + trazas lado a lado) e **Historial**. Derecha (control): **Seguridad fija arriba** y debajo conexión, parámetros, juegos, comandos y registro con su propio desplazamiento |
 | 701–1080 px | Monitoreo arriba (~60 % del alto) y control abajo, cada uno con su desplazamiento; seguridad a todo el ancho y las demás tarjetas en dos columnas |
-| ≤ 700 px | Seguridad fija arriba y pestañas abajo: **En vivo** (cifras, escena, trazas), **Historial**, **Ajustes** (WiFi, parámetros, juegos, comandos), **Conexión** (conexión, registro) |
+| ≤ 700 px | Seguridad fija arriba y pestañas abajo: **En vivo** (cifras, escena, trazas), **Historial**, **Motores**, **Ajustes** (WiFi, parámetros, juegos, comandos), **Conexión** (conexión, registro) |
 
 En pantallas bajas (≤ 820 px de alto) el encabezado oculta la descripción para dar alto a la vista.
 En pantallas táctiles los controles miden al menos ~40 px de alto.
@@ -243,6 +244,24 @@ transporte). En la sesión elegida:
 - **Tabla**: todas las tramas, 100 por página; **Ir al cabezal** salta al instante de la escena.
 - **Eventos**: comandos y mensajes del robot; un clic lleva a ese instante.
 - **Notas** (Enter guarda), **CSV** y **Borrar**.
+
+### Motores (banco de motores, fw ≥ 0.6.0)
+
+Pestaña **Motores**, con el robot **sobre un soporte y las ruedas en el aire**:
+
+- **Banco**: entrar pausa el control y deja los motores a cargo de la pestaña. Al salir queda la
+  parada de emergencia activa; **Armar** para volver a equilibrar.
+- **PWM manual** por motor (crudo, sin zona muerta). Mientras sea distinto de 0 la HMI lo renueva;
+  si la HMI se cierra, el robot lo apaga a los 30 s.
+- **Ensayo**: escalón, escalera, ida y vuelta o tramos a mano, sobre el motor izquierdo, el derecho
+  o los dos, muestreado en el robot cada 1–20 ms. Al terminar, el gateway lo guarda en la base y
+  se abre en **Ensayos**: RPM calculada de las cuentas (ventana elegible), PWM, cuentas, tabla de
+  RPM media y ruido por tramo, notas y **CSV**.
+- **Encoders**: cuentas, vueltas, RPM, flancos de cada canal, nivel de los pines A y B, un
+  diagnóstico automático (canal sin pulsos, sentido invertido, cables cruzados) y la prueba de
+  vueltas a mano (cuentas por vuelta medidas contra las esperadas).
+
+El robot simulado también tiene banco, para practicar sin hardware.
 
 ### Colores de las trazas
 

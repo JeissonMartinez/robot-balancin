@@ -53,7 +53,7 @@
     <section class="card vista" id="cardVista">
       <div class="card-head">
         <div class="seg tabs" role="tablist" aria-label="Vista">
-          <button type="button" data-tab="vivo">En vivo</button><button type="button" data-tab="historial">Historial</button>
+          <button type="button" data-tab="vivo">En vivo</button><button type="button" data-tab="historial">Historial</button><button type="button" data-tab="motores">Motores</button>
         </div>
         <div class="vivo-ctl" id="vivoCtl">
           <div class="seg" id="segVentana" role="group" aria-label="Ventana de tiempo"></div>
@@ -67,6 +67,7 @@
           <div class="plots" id="plots"></div>
         </div>
         <div class="panel-hist" id="panelHistorial" hidden></div>
+        <div class="panel-mot" id="panelMotores" hidden></div>
       </div>
     </section>
   </div>
@@ -115,7 +116,7 @@
         <div class="log mono" id="log"><div class="vacio">Sin eventos.</div></div>
       </section>
 
-      <footer class="pie">Gateway local · HMI v0.5.0 · <a href="https://github.com/JeissonMartinez/robot-balancin" target="_blank" rel="noopener">repositorio</a></footer>
+      <footer class="pie">Gateway local · HMI v0.6.0 · <a href="https://github.com/JeissonMartinez/robot-balancin" target="_blank" rel="noopener">repositorio</a></footer>
     </div>
   </aside>
 </main>
@@ -124,6 +125,7 @@
 <nav class="mnav" id="mnav" aria-label="Secciones">
   <button type="button" data-m="vivo"><span class="ic" aria-hidden="true">◉</span>En vivo</button>
   <button type="button" data-m="hist"><span class="ic" aria-hidden="true">☰</span>Historial</button>
+  <button type="button" data-m="mot"><span class="ic" aria-hidden="true">↻</span>Motores</button>
   <button type="button" data-m="ajustes"><span class="ic" aria-hidden="true">⚙</span>Ajustes</button>
   <button type="button" data-m="con"><span class="ic" aria-hidden="true">⇄</span>Conexión</button>
 </nav>

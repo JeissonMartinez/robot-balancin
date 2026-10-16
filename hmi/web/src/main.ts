@@ -11,6 +11,7 @@ import { Traces } from './plots/traces';
 import { PoseIntegrator } from './scene/pose';
 import { RobotScene } from './scene/scene';
 import { setupHistory } from './ui/history';
+import { setupMotors } from './ui/motors';
 import { setupConnection } from './ui/connection';
 import { setupCommands } from './ui/commands';
 import { describeEvent, setupLog } from './ui/log';
@@ -24,7 +25,7 @@ import { ensureAccess } from './ui/login';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /** Debe coincidir con __version__ del gateway (hmi/gateway/app/__init__.py). */
-const HMI_VERSION = '0.5.0';
+const HMI_VERSION = '0.6.0';
 
 const gw = new Gateway();
 
@@ -65,15 +66,18 @@ gw.on('status', (s) => {
   }
 });
 
-// ------------------------------------------------------------ pestañas: en vivo / historial
+// ------------------------------------------------------------ pestañas: en vivo / historial / motores
 const history = setupHistory($('panelHistorial'), gw, (m, bad = false) => log.add('hmi', m, bad ? 'bad' : ''));
+const motors = setupMotors($('panelMotores'), gw, note);
 const tabBtns = [...document.querySelectorAll<HTMLButtonElement>('#cardVista .tabs button')];
 function setTab(t: string) {
   tabBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tab === t)));
   $('panelVivo').hidden = t !== 'vivo';
   $('panelHistorial').hidden = t !== 'historial';
+  $('panelMotores').hidden = t !== 'motores';
   $('vivoCtl').hidden = t !== 'vivo';
   history.setActive(t === 'historial');
+  if (t === 'motores') motors.shown();
   try {
     localStorage.setItem('vista', t);
   } catch {
@@ -92,6 +96,7 @@ function setMobileTab(m: string) {
   mnavBtns.forEach((b) => (b.dataset.m === m ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   if (m === 'vivo') setTab('vivo');
   if (m === 'hist') setTab('historial');
+  if (m === 'mot') setTab('motores');
   window.scrollTo({ top: 0 });
 }
 mnavBtns.forEach((b) => b.addEventListener('click', () => setMobileTab(b.dataset.m!)));
@@ -110,7 +115,8 @@ gw.on('status', (s) => {
 });
 setTab((() => {
   try {
-    return localStorage.getItem('vista') === 'historial' ? 'historial' : 'vivo';
+    const v = localStorage.getItem('vista');
+    return v === 'historial' || v === 'motores' ? v : 'vivo';
   } catch {
     return 'vivo';
   }
