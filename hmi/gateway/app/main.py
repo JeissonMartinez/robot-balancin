@@ -63,20 +63,27 @@ class ParamSetRequest(BaseModel):
 
 def capture_to_csv(c: dict) -> str:
     """Muestras del ensayo y RPM de rueda por diferencia hacia adelante: la RPM de la fila k es
-    la del intervalo [k, k+1], en el que estuvo aplicado el PWM de la fila k."""
+    la del intervalo [k, k+1], en el que estuvo aplicado el PWM de la fila k. En los ensayos de
+    RPM (fw ≥ 0.7.0) se agrega la referencia."""
     cpw = (c.get("enc") or {}).get("cpw") or 2618
     rows = c["rows"]
-    out = [f"# ensayo {c['id']} · motor {c.get('motor')} · período {c.get('period_ms')} ms · "
-           f"tramos {json.dumps(c.get('seq'))} · {cpw:g} cuentas por vuelta de rueda",
-           "t_s,pwm_l,pwm_r,c_l,c_r,rpm_l,rpm_r"]
-    for k, (t, ul, ur, cl, cr) in enumerate(rows):
+    rpm_kind = c.get("kind") == "rpm"
+    cfg = f" · lazo {json.dumps(c.get('cfg'))}" if c.get("cfg") else ""
+    out = [f"# ensayo {c['id']} · {'RPM' if rpm_kind else 'PWM'} · motor {c.get('motor')} · período "
+           f"{c.get('period_ms')} ms · tramos {json.dumps(c.get('seq'))} · {cpw:g} cuentas por vuelta de rueda{cfg}",
+           "t_s,pwm_l,pwm_r,c_l,c_r,rpm_l,rpm_r" + (",ref_rpm" if rpm_kind else "")]
+    for k, row in enumerate(rows):
+        t, ul, ur, cl, cr = row[:5]
         rpm = ["", ""]
         if k + 1 < len(rows):
-            t2, _, _, cl2, cr2 = rows[k + 1]
+            t2, _, _, cl2, cr2 = rows[k + 1][:5]
             dt = (t2 - t) * 1e-6
             if dt > 0:
                 rpm = [f"{(cl2 - cl) / cpw / dt * 60:.3f}", f"{(cr2 - cr) / cpw / dt * 60:.3f}"]
-        out.append(f"{t * 1e-6:.6f},{ul},{ur},{cl},{cr},{rpm[0]},{rpm[1]}")
+        line = f"{t * 1e-6:.6f},{ul},{ur},{cl},{cr},{rpm[0]},{rpm[1]}"
+        if rpm_kind:
+            line += f",{(row[5] if len(row) > 5 else 0) / 10:g}"
+        out.append(line)
     return "\n".join(out) + "\n"
 
 

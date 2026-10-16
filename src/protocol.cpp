@@ -97,17 +97,23 @@ void protocolWriteTelemetry(const Telemetry &t, Print &out, bool json)
 
 void protocolWriteBench(const BenchFrame &f, Print &out, bool json)
 {
-  char buf[360];
+  char buf[460];
   int n;
   if (json)
     n = snprintf(buf, sizeof(buf),
                  "{\"type\":\"mot\",\"seq\":%lu,\"t\":%lu,\"pwmL\":%d,\"pwmR\":%d,\"cL\":%ld,\"cR\":%ld,"
                  "\"rpmL\":%.2f,\"rpmR\":%.2f,\"eLA\":%lu,\"eLB\":%lu,\"eRA\":%lu,\"eRB\":%lu,\"lv\":%u,\"es\":%d,"
+                 "\"mode\":\"%s\",\"ref\":%.2f,\"y\":%.2f,\"uF\":%.1f,\"uP\":%.1f,\"uI\":%.1f,"
                  "\"cs\":\"%s\",\"ci\":%u,\"ck\":%lu,\"cn\":%lu}\n",
                  (unsigned long)f.seq, (unsigned long)f.tMs, f.pwmL, f.pwmR, (long)f.cL, (long)f.cR, f.rpmL, f.rpmR,
                  (unsigned long)f.edges[0], (unsigned long)f.edges[1], (unsigned long)f.edges[2],
-                 (unsigned long)f.edges[3], f.levels, f.estop ? 1 : 0, benchCapStateName(f.capState), f.capId,
-                 (unsigned long)f.capCount, (unsigned long)f.capTotal);
+                 (unsigned long)f.edges[3], f.levels, f.estop ? 1 : 0, f.rpmMode ? "rpm" : "pwm", f.ref, f.meas, f.uF,
+                 f.uP, f.uI, benchCapStateName(f.capState), f.capId, (unsigned long)f.capCount,
+                 (unsigned long)f.capTotal);
+  else if (f.rpmMode)
+    n = snprintf(buf, sizeof(buf),
+                 "Banco RPM | ref %.1f | medida %.1f | PWM %d (ff %.1f P %.1f I %.1f) | RPM L %.1f R %.1f\n", f.ref,
+                 f.meas, f.pwmR, f.uF, f.uP, f.uI, f.rpmL, f.rpmR);
   else
     n = snprintf(buf, sizeof(buf),
                  "Banco | PWM L %d R %d | RPM L %.1f R %.1f | cuentas L %ld R %ld | flancos A/B L %lu/%lu R %lu/%lu | AB L %d%d R %d%d\n",
@@ -272,33 +278,78 @@ static void handleBench(JsonDocument &in, Print &out, JsonVariantConst id)
       return ack(out, id, false, "l y r deben ser enteros");
     return benchSetPwm(l, r, err) ? ackBench(out, id) : ack(out, id, false, err);
   }
+  if (strcmp(op, "rpm") == 0)
+  {
+    if (!in["r"].is<float>() && !in["r"].is<int>())
+      return ack(out, id, false, "r (RPM) debe ser un número");
+    return benchSetRpm(in["r"].as<float>(), err) ? ackBench(out, id) : ack(out, id, false, err);
+  }
+  if (strcmp(op, "rpmcfg") == 0)
+  {
+    // Campos opcionales: los que faltan se mantienen
+    RpmConfig c = benchRpmConfig();
+    auto num = [&](const char *k, float &dst) -> bool {
+      if (in[k].isNull())
+        return true;
+      if (!in[k].is<float>() && !in[k].is<int>())
+        return false;
+      dst = in[k].as<float>();
+      return true;
+    };
+    auto u8 = [&](const char *k, uint8_t &dst) -> bool {
+      if (in[k].isNull())
+        return true;
+      if (!in[k].is<int>() || in[k].as<int>() < 0 || in[k].as<int>() > 255)
+        return false;
+      dst = in[k].as<int>();
+      return true;
+    };
+    auto flag = [&](const char *k, bool &dst) -> bool {
+      if (in[k].isNull())
+        return true;
+      if (!in[k].is<bool>())
+        return false;
+      dst = in[k].as<bool>();
+      return true;
+    };
+    if (!num("kp", c.kp) || !num("ki", c.ki) || !u8("ts_ms", c.tsMs) || !u8("win_ms", c.winMs) || !flag("ff", c.ff) ||
+        !num("ff_k", c.ffK) || !num("ff_b", c.ffB) || !num("i_max", c.iMax) || !flag("follow", c.follow))
+      return ack(out, id, false, "rpmcfg: kp, ki, ff_k, ff_b, i_max numéricos; ts_ms, win_ms enteros; ff, follow true/false");
+    return benchSetRpmConfig(c, err) ? ackBench(out, id) : ack(out, id, false, err);
+  }
   if (strcmp(op, "run") == 0)
   {
     const char *motor = in["motor"] | "";
     uint8_t mask = strcmp(motor, "L") == 0 ? 1 : strcmp(motor, "R") == 0 ? 2 : strcmp(motor, "LR") == 0 ? 3 : 0;
+    const char *kind = in["kind"] | "pwm";
+    const bool rpm = strcmp(kind, "rpm") == 0;
+    if (!rpm && strcmp(kind, "pwm") != 0)
+      return ack(out, id, false, "kind debe ser \"pwm\" o \"rpm\"");
     if (!in["seq"].is<JsonArrayConst>())
-      return ack(out, id, false, "seq debe ser una lista de [pwm, ms]");
+      return ack(out, id, false, "seq debe ser una lista de [valor, ms]");
     JsonArrayConst seq = in["seq"].as<JsonArrayConst>();
     if (seq.size() > BENCH_MAX_SEGMENTS)
       return ack(out, id, false, String("seq admite hasta ") + BENCH_MAX_SEGMENTS + " tramos");
-    int16_t pwm[BENCH_MAX_SEGMENTS];
+    float val[BENCH_MAX_SEGMENTS];
     uint32_t ms[BENCH_MAX_SEGMENTS];
     uint8_t n = 0;
     for (JsonVariantConst s : seq)
     {
-      if (!s.is<JsonArrayConst>() || s.size() != 2 || !s[0].is<int>() || !s[1].is<int>())
-        return ack(out, id, false, "cada tramo debe ser [pwm, ms] con enteros");
-      int p = s[0].as<int>(), d = s[1].as<int>();
-      if (p < -255 || p > 255 || d < 1)
-        return ack(out, id, false, "tramo fuera de rango: pwm en [-255, 255], ms ≥ 1");
-      pwm[n] = p;
+      // PWM: enteros; RPM: admite decimales
+      const bool valOk = rpm ? (s[0].is<float>() || s[0].is<int>()) : s[0].is<int>();
+      if (!s.is<JsonArrayConst>() || s.size() != 2 || !valOk || !s[1].is<int>())
+        return ack(out, id, false, rpm ? "cada tramo debe ser [rpm, ms] (ms entero)" : "cada tramo debe ser [pwm, ms] con enteros");
+      const int d = s[1].as<int>();
+      if (d < 1)
+        return ack(out, id, false, "cada tramo debe durar al menos 1 ms");
+      val[n] = s[0].as<float>();
       ms[n] = d;
       n++;
     }
     int period;
     if (!optInt(in, "period_ms", 2, period) || period < 1)
       return ack(out, id, false, "period_ms debe ser entero positivo");
-    return benchRun(mask, pwm, ms, n, period, err) ? ackBench(out, id) : ack(out, id, false, err);
+    return benchRun(mask, rpm, val, ms, n, period, err) ? ackBench(out, id) : ack(out, id, false, err);
   }
   if (strcmp(op, "get") == 0)
   {

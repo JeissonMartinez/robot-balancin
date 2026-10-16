@@ -109,3 +109,36 @@ def test_bench_end_to_end(client):
     assert len(client.get("/api/captures").json()) == 1
     assert client.delete(f"/api/captures/{cap['id']}").json()["ok"]
     assert client.get("/api/captures").json() == []
+
+
+def test_rpm_loop_tracks_reference():
+    b = SimBench()
+    b.enter()
+    assert b.set_rpm(25, estop=False) is None
+    for _ in range(800):
+        f = b.tick(estop=False)
+    assert f["mode"] == "rpm" and abs(f["y"] - 25) < 3, f
+    assert f["pwmL"] == f["pwmR"]  # izquierdo seguidor
+    assert b.set_rpm(99, estop=False) is not None
+    assert "kp" in b.set_cfg({"kp": 50})
+
+
+def test_rpm_capture_end_to_end(client):
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        assert client.post("/api/connect", json={"transport": "demo"}).status_code == 200
+        ws.send_json({"type": "cmd", "id": 1, "cmd": "bench", "op": "on"})
+        recv_until(ws, lambda m: m.get("type") == "ack" and m.get("id") == 1)
+        ws.send_json({"type": "cmd", "id": 2, "cmd": "bench", "op": "rpmcfg", "kp": 2.0})
+        ack = recv_until(ws, lambda m: m.get("type") == "ack" and m.get("id") == 2)
+        assert ack["ok"] and ack["bench"]["rpmcfg"]["kp"] == 2.0
+        ws.send_json({"type": "cmd", "id": 3, "cmd": "bench", "op": "run", "motor": "R", "kind": "rpm",
+                      "seq": [[0, 100], [20.5, 600], [0, 100]], "period_ms": 2})
+        ack = recv_until(ws, lambda m: m.get("type") == "ack" and m.get("id") == 3)
+        assert ack["ok"], ack
+        ready = recv_until(ws, lambda m: m.get("type") == "captures_changed", timeout=6)
+        cap = client.get(f"/api/captures/{ready['id']}").json()
+        assert cap["kind"] == "rpm" and cap["cfg"]["kp"] == 2.0 and len(cap["rows"][0]) == 6
+        assert cap["rows"][200][5] == 205  # referencia · 10
+        csv = client.get(f"/api/captures/{ready['id']}.csv").text.splitlines()
+        assert csv[1].endswith(",ref_rpm") and csv[2 + 200].endswith(",20.5")

@@ -213,8 +213,20 @@ class DemoTransport(Transport):
             err = b.set_pwm(l, r, self.estop)
             if err:
                 return self._ack(mid, False, err)
+        elif op == "rpm":
+            r = msg.get("r")
+            if isinstance(r, bool) or not isinstance(r, (int, float)):
+                return self._ack(mid, False, "r (RPM) debe ser un número")
+            err = b.set_rpm(r, self.estop)
+            if err:
+                return self._ack(mid, False, err)
+        elif op == "rpmcfg":
+            err = b.set_cfg({k: v for k, v in msg.items() if k not in ("type", "id", "cmd", "op")})
+            if err:
+                return self._ack(mid, False, err)
         elif op == "run":
-            err = b.run(msg.get("motor", ""), msg.get("seq"), msg.get("period_ms", 2), self.estop)
+            err = b.run(msg.get("motor", ""), msg.get("seq"), msg.get("period_ms", 2), self.estop,
+                        msg.get("kind", "pwm"))
             if err:
                 return self._ack(mid, False, err)
         elif op == "get":

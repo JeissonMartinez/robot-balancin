@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.6.3"
+#define FW_VERSION "0.7.0"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -103,11 +103,25 @@ const bool ENC_L_SINGLE_CHANNEL = true;
 // ===================== BANCO DE MOTORES (bench.h) ==============
 // Pruebas de lazo abierto de cada motor con el robot sobre un soporte (ruedas en el aire).
 const uint32_t BENCH_LIVE_MS = 20;           // Trama "mot" en vivo cada 20 ms (50 Hz)
-const size_t BENCH_MAX_SAMPLES = 5000;       // Muestras por ensayo (16 B c/u = 80 kB de RAM)
-const uint8_t BENCH_MAX_SEGMENTS = 16;       // Tramos [PWM, ms] por ensayo
+const size_t BENCH_MAX_SAMPLES = 4000;       // Muestras por ensayo (20 B c/u = 80 kB de RAM)
+const uint8_t BENCH_MAX_SEGMENTS = 16;       // Tramos [PWM o RPM, ms] por ensayo
 const uint32_t BENCH_MAX_PERIOD_MS = 20;     // Período de muestreo de un ensayo: 1..20 ms
 const uint32_t BENCH_MANUAL_TIMEOUT_MS = 30000; // El PWM manual se apaga si no se renueva
 const int BENCH_GET_MAX_ROWS = 200;          // Filas por respuesta al leer un ensayo
+
+// ===================== LAZO DE RPM (banco, M2) =================
+// Lazo de la rueda DERECHA: u = u_ff + Kp·e + Ki·∫e, e = RPM_ref − RPM medida en una ventana.
+// El izquierdo (encoder dañado) es seguidor: recibe el mismo PWM. Valores iniciales de M1
+// (K = 0.25 RPM/PWM, τ = 20 ms, batería 7.65 V) por cancelación de polo con λ = 50 ms.
+// Se cambian en ejecución con "bench" op "rpmcfg" (no se guardan en NVS).
+const float RPM_KP_DEFAULT = 1.33f;          // [PWM/RPM]
+const float RPM_KI_DEFAULT = 67.0f;          // [PWM/(RPM·s)] = Kp / τ
+const uint8_t RPM_TS_MS_DEFAULT = 5;         // Período del lazo [ms]
+const uint8_t RPM_WIN_MS_DEFAULT = 10;       // Ventana de medición de la RPM [ms] (1 cuenta = 2.3 RPM)
+const float RPM_FF_K_DEFAULT = 0.25f;        // Prealimentación: RPM ≈ K·|u| − B → u_ff = (|r| + B)/K
+const float RPM_FF_B_DEFAULT = 1.8f;         // [RPM]
+const float RPM_I_MAX_DEFAULT = 100.0f;      // Tope del término integral [PWM]
+const float BENCH_MAX_RPM = 60.0f;           // Referencia máxima [RPM] (≈ 61 RPM con PWM 255 a 7.65 V)
 
 // ===================== CONTROL ================================
 const uint32_t CONTROL_PERIOD_MS = 20;       // Periodo de TaskBalanceo (50 Hz)

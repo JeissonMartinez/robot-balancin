@@ -5,8 +5,8 @@ Tablas (docs/hmi/PLAN.md §5):
 - telemetry:  una fila por trama, columnas con los campos del protocolo.
 - events:     comandos, respuestas, cambios de parámetros y logs del robot.
 - param_sets: juegos de parámetros con nombre (se usa desde F2).
-- captures:   ensayos del banco de motores (fw ≥ 0.6.0): tramos de PWM y muestras
-              [t_us, pwmL, pwmR, cL, cR] tal como las mide el robot.
+- captures:   ensayos del banco de motores (fw ≥ 0.6.0): tramos de PWM (o de RPM, fw ≥ 0.7.0)
+              y muestras [t_us, pwmL, pwmR, cL, cR(, ref·10)] tal como las mide el robot.
 
 Todas las funciones son síncronas y seguras entre hilos (un lock); el gateway las
 llama con asyncio.to_thread para no frenar el event loop.
@@ -79,7 +79,9 @@ CREATE TABLE IF NOT EXISTS captures (
     enc_json    TEXT,
     n           INTEGER,
     rows_json   TEXT NOT NULL,
-    notes       TEXT
+    notes       TEXT,
+    kind        TEXT,
+    cfg_json    TEXT
 );
 CREATE INDEX IF NOT EXISTS captures_session ON captures(session_id);
 """
@@ -104,6 +106,11 @@ class Database:
             if version > SCHEMA_VERSION:
                 raise RuntimeError(f"la base {path} es de una versión más nueva ({version})")
             self._con.executescript(DDL)
+            # Columnas agregadas después de crear la tabla (bases de versiones anteriores)
+            cols = {r[1] for r in self._con.execute("PRAGMA table_info(captures)")}
+            for col in ("kind", "cfg_json"):
+                if col not in cols:
+                    self._con.execute(f"ALTER TABLE captures ADD COLUMN {col} TEXT")
             self._con.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
             self._con.commit()
 
@@ -252,9 +259,10 @@ class Database:
         with self._lock:
             cur = self._con.execute(
                 "INSERT INTO captures(session_id, created_at, fw, cap_id, state, motor, period_ms, seq_json, enc_json,"
-                " n, rows_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                " n, rows_json, kind, cfg_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (session_id, now_iso(), fw, meta.get("id"), meta.get("st"), meta.get("motor"), meta.get("period_ms"),
-                 json.dumps(meta.get("seq")), json.dumps(enc) if enc else None, len(rows), json.dumps(rows)),
+                 json.dumps(meta.get("seq")), json.dumps(enc) if enc else None, len(rows), json.dumps(rows),
+                 meta.get("kind", "pwm"), json.dumps(meta["rpmcfg"]) if meta.get("rpmcfg") else None),
             )
             self._con.commit()
             return cur.lastrowid
@@ -325,13 +333,16 @@ class Database:
 
 
 # Columnas de un ensayo sin las muestras (para listarlos)
-_CAPTURE_META = "id, session_id, created_at, fw, cap_id, state, motor, period_ms, seq_json, enc_json, n, notes"
+_CAPTURE_META = ("id, session_id, created_at, fw, cap_id, state, motor, period_ms, seq_json, enc_json, n, notes, "
+                 "kind, cfg_json")
 
 
 def _capture_dict(r: sqlite3.Row) -> dict:
     d = dict(r)
     d["seq"] = json.loads(d.pop("seq_json")) if d.get("seq_json") else None
     d["enc"] = json.loads(d.pop("enc_json")) if d.get("enc_json") else None
+    d["cfg"] = json.loads(d.pop("cfg_json")) if d.get("cfg_json") else None
+    d["kind"] = d.get("kind") or "pwm"
     if "rows_json" in d:
         d["rows"] = json.loads(d.pop("rows_json"))
     return d

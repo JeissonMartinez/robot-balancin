@@ -25,7 +25,7 @@ import { ensureAccess } from './ui/login';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /** Debe coincidir con __version__ del gateway (hmi/gateway/app/__init__.py). */
-const HMI_VERSION = '0.6.0';
+const HMI_VERSION = '0.7.0';
 
 const gw = new Gateway();
 

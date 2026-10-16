@@ -10,22 +10,29 @@
  *   grafica con la RPM calculada de las cuentas y una tabla de RPM media y ruido por tramo.
  * - Encoders: cuentas, vueltas, RPM, flancos por canal, nivel de A y B, diagnóstico
  *   automático y prueba de vueltas a mano (cuentas por vuelta medidas).
+ * - Lazo de RPM (M2, fw ≥ 0.7.0): referencia de la rueda derecha en vivo y configuración del
+ *   lazo (Kp, Ki, período, ventana, prealimentación, izquierdo seguidor). Los ensayos pueden ser
+ *   de PWM o de RPM; en los de RPM la tabla da subida, sobrepico, establecimiento y error.
  * - La rueda izquierda se muestra siempre, igual que la derecha.
  */
 import type { Gateway } from '../core/gateway';
 import { api } from '../core/gateway';
-import type { Ack, BenchStatus, Capture, EncInfo, MotFrame } from '../core/protocol';
+import type { Ack, BenchStatus, Capture, EncInfo, MotFrame, RpmConfig } from '../core/protocol';
 import { Traces, type PlotDef } from '../plots/traces';
 import { confirmDialog, escapeHtml } from './dialog';
 
 type Log = (m: string, bad?: boolean) => void;
 type Motor = 'L' | 'R' | 'LR';
 type Preset = 'escalon' | 'escalera' | 'idavuelta' | 'manual';
+type Kind = 'pwm' | 'rpm';
 
 const DEFAULT_ENC: EncInfo = { ppr: 11, decode: 4, gear: 59.5, cpw: 2618 };
 const KEEPALIVE_MS = 10_000;
 const SEND_THROTTLE_MS = 120;
 const MAX_SEGMENTS = 16;
+const MAX_RPM = 60;
+/** Valores iniciales del lazo (M1: K = 0.25 RPM/PWM, τ = 20 ms, λ = 50 ms), iguales a config.h. */
+const DEFAULT_RPMCFG: RpmConfig = { kp: 1.33, ki: 67, ts_ms: 5, win_ms: 10, ff: true, ff_k: 0.25, ff_b: 1.8, i_max: 100, follow: true };
 
 const LIVE_PLOTS: PlotDef[] = [
   {
@@ -33,6 +40,15 @@ const LIVE_PLOTS: PlotDef[] = [
     series: [
       { key: 'rpmR', label: 'derecha', slot: 1, decimals: 1 },
       { key: 'rpmL', label: 'izquierda', slot: 2, decimals: 1 },
+      { key: 'ref', label: 'referencia', slot: 3, dash: [6, 4], decimals: 1 },
+    ],
+  },
+  {
+    id: 'lazo', title: 'Mando del lazo de RPM', unit: 'PWM',
+    series: [
+      { key: 'uF', label: 'prealim.', slot: 3, decimals: 1 },
+      { key: 'uP', label: 'P', slot: 4, decimals: 1 },
+      { key: 'uI', label: 'I', slot: 5, decimals: 1 },
     ],
   },
   {
@@ -57,6 +73,7 @@ const CAPTURE_PLOTS: PlotDef[] = [
     series: [
       { key: 'rpmR', label: 'derecha', slot: 1, decimals: 1 },
       { key: 'rpmL', label: 'izquierda', slot: 2, decimals: 1 },
+      { key: 'ref', label: 'referencia', slot: 3, dash: [6, 4], decimals: 1 },
     ],
   },
   {
@@ -76,6 +93,7 @@ const CAPTURE_PLOTS: PlotDef[] = [
 ];
 
 interface Form {
+  kind: Kind;
   motor: Motor;
   preset: Preset;
   period: number;
@@ -93,7 +111,7 @@ interface Form {
 }
 
 const DEFAULT_FORM: Form = {
-  motor: 'R', preset: 'escalon', period: 2, base: 0, step: 120, pre: 300, dur: 1500, post: 700,
+  kind: 'pwm', motor: 'R', preset: 'escalon', period: 2, base: 0, step: 120, pre: 300, dur: 1500, post: 700,
   p0: 30, dp: 30, n: 7, amp: 120, pause: 500, custom: '0 300\n120 1500\n0 700',
 };
 
@@ -133,7 +151,9 @@ export function buildSequence(f: Form): { seq: [number, number][]; err?: string 
         const t = line.trim();
         if (!t || t.startsWith('#')) continue;
         const m = t.split(/[\s,;]+/).map(Number);
-        if (m.length !== 2 || !m.every(Number.isInteger)) return { seq: [], err: `línea no válida: «${t}» (PWM y ms enteros)` };
+        const valOk = f.kind === 'rpm' ? Number.isFinite(m[0]) : Number.isInteger(m[0]);
+        if (m.length !== 2 || !valOk || !Number.isInteger(m[1]))
+          return { seq: [], err: `línea no válida: «${t}» (${f.kind === 'rpm' ? 'RPM y ms entero' : 'PWM y ms enteros'})` };
         seq.push([m[0], m[1]]);
       }
       break;
@@ -141,8 +161,10 @@ export function buildSequence(f: Form): { seq: [number, number][]; err?: string 
   seq = seq.filter(([, ms]) => ms > 0);
   if (!seq.length) return { seq, err: 'el ensayo no tiene tramos' };
   if (seq.length > MAX_SEGMENTS) return { seq, err: `máximo ${MAX_SEGMENTS} tramos (hay ${seq.length})` };
-  for (const [pwm, ms] of seq) {
-    if (!Number.isInteger(pwm) || pwm < -255 || pwm > 255) return { seq, err: `PWM ${pwm} fuera de [-255, 255]` };
+  for (const [v, ms] of seq) {
+    if (f.kind === 'rpm') {
+      if (!Number.isFinite(v) || Math.abs(v) > MAX_RPM) return { seq, err: `RPM ${v} fuera de [−${MAX_RPM}, ${MAX_RPM}]` };
+    } else if (!Number.isInteger(v) || v < -255 || v > 255) return { seq, err: `PWM ${v} fuera de [-255, 255]` };
     if (!Number.isInteger(ms) || ms > 60000) return { seq, err: `duración ${ms} ms fuera de [1, 60000]` };
   }
   return { seq };
@@ -195,6 +217,40 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
       </section>
 
       <section class="mot-sec">
+        <div class="mot-sec-h"><h3>Lazo de RPM</h3><span class="pill" id="rpmEstado">PWM manual</span></div>
+        <div class="mot-pwm" id="rpmRow">
+          <span class="name">Referencia derecha <span class="key mono">RPM</span></span>
+          <input class="num mono" type="number" min="-60" max="60" step="0.5" value="0" aria-label="Referencia de RPM">
+          <button class="btn small cero" type="button" title="Referencia 0">0</button>
+          <input type="range" min="-60" max="60" step="0.5" value="0" aria-label="Referencia de RPM">
+        </div>
+        <div class="mot-nota muted" id="rpmMedida">Mueve la referencia para activar el lazo. El izquierdo recibe el mismo PWM si está como seguidor.</div>
+        <details class="grupo" id="rpmCfgBox">
+          <summary>Configuración del lazo</summary>
+          <div class="grupo-body">
+            <div class="mot-grid">
+              <label class="field"><span>Kp [PWM/RPM]</span><input type="number" data-c="kp" step="0.1" min="0" max="20"></label>
+              <label class="field"><span>Ki [PWM/(RPM·s)]</span><input type="number" data-c="ki" step="1" min="0" max="2000"></label>
+              <label class="field"><span>Período [ms]</span><select data-c="ts_ms"><option>1</option><option>2</option><option>5</option><option>10</option><option>20</option></select></label>
+              <label class="field"><span>Ventana [ms]</span><select data-c="win_ms"><option>5</option><option>10</option><option>20</option><option>40</option></select></label>
+              <label class="field"><span>Prealim. K [RPM/PWM]</span><input type="number" data-c="ff_k" step="0.01" min="0.05" max="1"></label>
+              <label class="field"><span>Prealim. B [RPM]</span><input type="number" data-c="ff_b" step="0.1" min="0" max="20"></label>
+              <label class="field"><span>Tope de I [PWM]</span><input type="number" data-c="i_max" step="5" min="0" max="255"></label>
+              <div class="field"><span>Opciones</span>
+                <label class="switch"><input type="checkbox" data-c="ff"> Prealimentación</label>
+                <label class="switch"><input type="checkbox" data-c="follow"> Izquierdo seguidor</label>
+              </div>
+            </div>
+            <div class="mot-nota mono" id="rpmCfgInfo"></div>
+            <div class="row">
+              <button class="btn small primary" type="button" id="rpmAplicar">Aplicar</button>
+              <button class="btn small" type="button" id="rpmIniciales">Valores de M1</button>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="mot-sec">
         <div class="mot-sec-h"><h3>Ensayo</h3></div>
         <div class="mot-grid">
           <label class="field"><span>Motor</span>
@@ -202,6 +258,9 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
           </label>
           <label class="field"><span>Muestreo</span>
             <select id="motPeriodo"><option value="1">1 ms</option><option value="2">2 ms</option><option value="5">5 ms</option><option value="10">10 ms</option><option value="20">20 ms</option></select>
+          </label>
+          <label class="field full"><span>Variable</span>
+            <div class="seg" id="motKind"><button type="button" data-v="pwm">PWM (lazo abierto)</button><button type="button" data-v="rpm">RPM (lazo cerrado)</button></div>
           </label>
           <label class="field full"><span>Tipo</span>
             <select id="motTipo">
@@ -213,29 +272,29 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
           </label>
         </div>
         <div class="mot-grid" data-p="escalon">
-          <label class="field"><span>PWM base</span><input type="number" data-f="base" min="-255" max="255" step="1"></label>
-          <label class="field"><span>PWM escalón</span><input type="number" data-f="step" min="-255" max="255" step="1"></label>
+          <label class="field"><span><span class="vname">PWM</span> base</span><input type="number" data-f="base" data-val step="1"></label>
+          <label class="field"><span><span class="vname">PWM</span> escalón</span><input type="number" data-f="step" data-val step="1"></label>
           <label class="field"><span>Antes [ms]</span><input type="number" data-f="pre" min="0" step="50"></label>
           <label class="field"><span>Escalón [ms]</span><input type="number" data-f="dur" min="1" step="50"></label>
           <label class="field"><span>Después [ms]</span><input type="number" data-f="post" min="0" step="50"></label>
         </div>
         <div class="mot-grid" data-p="escalera">
-          <label class="field"><span>PWM inicial</span><input type="number" data-f="p0" min="-255" max="255" step="1"></label>
-          <label class="field"><span>Paso de PWM</span><input type="number" data-f="dp" min="-255" max="255" step="1"></label>
+          <label class="field"><span><span class="vname">PWM</span> inicial</span><input type="number" data-f="p0" data-val step="1"></label>
+          <label class="field"><span>Paso de <span class="vname">PWM</span></span><input type="number" data-f="dp" data-val step="1"></label>
           <label class="field"><span>Escalones</span><input type="number" data-f="n" min="1" max="14" step="1"></label>
           <label class="field"><span>Cada uno [ms]</span><input type="number" data-f="dur" min="1" step="50"></label>
           <label class="field"><span>Antes [ms]</span><input type="number" data-f="pre" min="0" step="50"></label>
           <label class="field"><span>Después [ms]</span><input type="number" data-f="post" min="0" step="50"></label>
         </div>
         <div class="mot-grid" data-p="idavuelta">
-          <label class="field"><span>Amplitud A</span><input type="number" data-f="amp" min="0" max="255" step="1"></label>
+          <label class="field"><span>Amplitud A [<span class="vname">PWM</span>]</span><input type="number" data-f="amp" data-val step="1"></label>
           <label class="field"><span>Cada sentido [ms]</span><input type="number" data-f="dur" min="1" step="50"></label>
           <label class="field"><span>Pausa [ms]</span><input type="number" data-f="pause" min="0" step="50"></label>
           <label class="field"><span>Antes [ms]</span><input type="number" data-f="pre" min="0" step="50"></label>
           <label class="field"><span>Después [ms]</span><input type="number" data-f="post" min="0" step="50"></label>
         </div>
         <div class="mot-grid" data-p="manual">
-          <label class="field full"><span>Tramos: «PWM ms» por línea</span><textarea class="mono" data-f="custom" rows="5" spellcheck="false"></textarea></label>
+          <label class="field full"><span>Tramos: «<span class="vname">PWM</span> ms» por línea</span><textarea class="mono" data-f="custom" rows="5" spellcheck="false"></textarea></label>
         </div>
         <div class="mot-resumen mono" id="motResumen"></div>
         <div class="row">
@@ -311,7 +370,10 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
 
   async function cmd(op: string, fields: Record<string, unknown> = {}): Promise<Ack> {
     const ack = await gw.command('bench', { op, ...fields });
-    if (ack.ok && ack.bench) bench = ack.bench as BenchStatus;
+    if (ack.ok && ack.bench) {
+      bench = ack.bench as BenchStatus;
+      fillCfg(bench.rpmcfg);
+    }
     if (!ack.ok) log(`banco ${op}: ${ack.err}`, true);
     render();
     return ack;
@@ -360,6 +422,7 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
     lastSend = Date.now();
     const ack = await cmd('pwm', { l: desired.L, r: desired.R });
     if (!ack.ok && bench) setPwmUi(bench.pwm[0], bench.pwm[1]);
+    if (ack.ok) setRefUi(0); // el mando pasa a PWM manual
   }
 
   function schedulePwm(now = false) {
@@ -391,19 +454,124 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
     setPwmUi(0, 0);
     schedulePwm(true);
   });
-  // El robot apaga el PWM manual si no se renueva en 30 s
+  // ------------------------------------------------------------ lazo de RPM
+  const rpmRow = $('rpmRow');
+  const rpmNum = rpmRow.querySelector<HTMLInputElement>('.num')!;
+  const rpmRange = rpmRow.querySelector<HTMLInputElement>('input[type=range]')!;
+  let desiredRef = 0;
+  let rpmTimer = 0;
+  let rpmLast = 0;
+
+  function setRefUi(v: number) {
+    desiredRef = v;
+    rpmNum.value = String(v);
+    rpmRange.value = String(v);
+  }
+
+  async function sendRpm() {
+    rpmTimer = 0;
+    rpmLast = Date.now();
+    const ack = await cmd('rpm', { r: desiredRef });
+    if (ack.ok) setPwmUi(0, 0); // el mando pasa al lazo
+    else if (bench) setRefUi(bench.ref ?? 0);
+  }
+
+  function changeRef(v: number, now: boolean) {
+    v = Math.max(-MAX_RPM, Math.min(MAX_RPM, Math.round((Number(v) || 0) * 2) / 2));
+    setRefUi(v);
+    if (now) {
+      clearTimeout(rpmTimer);
+      sendRpm();
+    } else if (!rpmTimer) {
+      rpmTimer = window.setTimeout(sendRpm, Math.max(0, SEND_THROTTLE_MS - (Date.now() - rpmLast)));
+    }
+  }
+
+  rpmRange.addEventListener('input', () => changeRef(Number(rpmRange.value), false));
+  rpmRange.addEventListener('change', () => changeRef(Number(rpmRange.value), true));
+  rpmNum.addEventListener('change', () => changeRef(Number(rpmNum.value), true));
+  rpmRow.querySelector('.cero')!.addEventListener('click', () => changeRef(0, true));
+
+  // Configuración del lazo: se edita aquí y se envía con Aplicar
+  const cfgEls = [...root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-c]')];
+  let cfgDirty = false;
+
+  function writeCfg(c: RpmConfig) {
+    for (const el of cfgEls) {
+      const v = c[el.dataset.c as keyof RpmConfig];
+      if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = !!v;
+      else el.value = String(v);
+    }
+    cfgInfo();
+  }
+
+  function fillCfg(c: RpmConfig | undefined) {
+    if (c && !cfgDirty) writeCfg(c);
+  }
+
+  function readCfg(): RpmConfig {
+    const c = { ...DEFAULT_RPMCFG } as Record<string, unknown>;
+    for (const el of cfgEls) {
+      const k = el.dataset.c!;
+      c[k] = el instanceof HTMLInputElement && el.type === 'checkbox' ? el.checked : Number(el.value);
+    }
+    return c as unknown as RpmConfig;
+  }
+
+  /** Lo que significan Kp y Ki con el modelo de M1 (τ = 20 ms, K = 0.25 RPM/PWM). */
+  function cfgInfo() {
+    const c = readCfg();
+    const tau = 0.02;
+    const k = 0.25;
+    const lTot = (c.win_ms / 2 + c.ts_ms / 2 + 2) / 1000; // ventana + período + motor
+    const ti = c.ki > 0 ? c.kp / c.ki : Infinity;
+    const lambda = c.kp > 0 ? tau / (k * c.kp) - lTot : Infinity;
+    const res = 60 / (enc().cpw * c.win_ms * 1e-3);
+    $('rpmCfgInfo').textContent =
+      `Ti = Kp/Ki = ${isFinite(ti) ? (ti * 1000).toFixed(0) + ' ms' : '∞'} (τ del motor: 20 ms) · ` +
+      `λ ≈ ${isFinite(lambda) ? Math.max(0, lambda * 1000).toFixed(0) + ' ms' : '—'} · ` +
+      `ventana: ${res.toFixed(2)} RPM por cuenta, ~${(c.win_ms / 2).toFixed(0)} ms de retardo`;
+  }
+
+  cfgEls.forEach((el) =>
+    el.addEventListener(el instanceof HTMLInputElement && el.type === 'checkbox' ? 'change' : 'input', () => {
+      cfgDirty = true;
+      cfgInfo();
+    }),
+  );
+  $('rpmAplicar').addEventListener('click', async () => {
+    const ack = await cmd('rpmcfg', { ...readCfg() });
+    if (ack.ok) {
+      cfgDirty = false;
+      fillCfg(bench?.rpmcfg);
+      log('lazo de RPM: configuración aplicada');
+    }
+  });
+  $('rpmIniciales').addEventListener('click', () => {
+    cfgDirty = true;
+    writeCfg(DEFAULT_RPMCFG);
+  });
+  writeCfg(DEFAULT_RPMCFG);
+
+  // El robot apaga el mando manual si no se renueva en 30 s
   setInterval(() => {
-    if (benchOn() && !capRunning() && (desired.L || desired.R)) sendPwm();
+    if (!benchOn() || capRunning()) return;
+    if (last?.mode === 'rpm' && desiredRef) sendRpm();
+    else if (desired.L || desired.R) sendPwm();
   }, KEEPALIVE_MS);
 
   // ------------------------------------------------------------ ensayo
   const segMotor = $('motMotor');
+  const segKind = $('motKind');
   const selTipo = $<HTMLSelectElement>('motTipo');
   const selPeriodo = $<HTMLSelectElement>('motPeriodo');
   const fieldInputs = [...root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-f]')];
 
   function fillForm() {
     segMotor.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === form.motor)));
+    segKind.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === form.kind)));
+    root.querySelectorAll('.vname').forEach((el) => (el.textContent = form.kind === 'rpm' ? 'RPM' : 'PWM'));
+    root.querySelectorAll<HTMLInputElement>('[data-val]').forEach((el) => (el.step = form.kind === 'rpm' ? '0.5' : '1'));
     selTipo.value = form.preset;
     selPeriodo.value = String(form.period);
     for (const el of fieldInputs) {
@@ -422,7 +590,9 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
       const grid = el.closest<HTMLElement>('.mot-grid[data-p]');
       if (grid && grid.dataset.p !== form.preset) continue;
       const k = el.dataset.f as keyof Form;
-      (form as unknown as Record<string, unknown>)[k] = k === 'custom' ? el.value : Math.round(Number(el.value) || 0);
+      const v = Number(el.value) || 0;
+      (form as unknown as Record<string, unknown>)[k] =
+        k === 'custom' ? el.value : el.hasAttribute('data-val') && form.kind === 'rpm' ? Math.round(v * 10) / 10 : Math.round(v);
     }
     saveForm(form);
   }
@@ -439,7 +609,8 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
       const n = Math.floor(ms / form.period) + 1;
       const max = bench?.max_samples ?? 5000;
       const tramos = seq.map(([p, d]) => `${p}·${d}`).join('  ');
-      out.innerHTML = `${seq.length} tramos · ${(ms / 1000).toFixed(2)} s · <span class="${n > max ? 'err' : ''}">${n} muestras${n > max ? ` (máx. ${max})` : ''}</span><br><span class="muted">${tramos}</span>`;
+      const lazo = form.kind === 'rpm' ? 'RPM, lazo de la rueda derecha · ' : '';
+      out.innerHTML = `${lazo}${seq.length} tramos · ${(ms / 1000).toFixed(2)} s · <span class="${n > max ? 'err' : ''}">${n} muestras${n > max ? ` (máx. ${max})` : ''}</span><br><span class="muted">${tramos}</span>`;
       if (n > max) btn.dataset.invalid = '1';
       else delete btn.dataset.invalid;
     }
@@ -449,6 +620,18 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
   segMotor.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
     b.addEventListener('click', () => {
       form.motor = b.dataset.v as Motor;
+      saveForm(form);
+      fillForm();
+    }),
+  );
+  segKind.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
+    b.addEventListener('click', () => {
+      const kind = b.dataset.v as Kind;
+      if (kind === form.kind) return;
+      // Convierte los valores con la recta de M0 (RPM ≈ 0.25 · PWM) para que sigan teniendo sentido
+      const conv = (v: number) => (kind === 'rpm' ? Math.round(v * 0.25 * 2) / 2 : Math.round(v / 0.25));
+      for (const k of ['base', 'step', 'p0', 'dp', 'amp'] as const) form[k] = conv(form[k]);
+      form.kind = kind;
       saveForm(form);
       fillForm();
     }),
@@ -472,7 +655,8 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
     const { seq, err } = buildSequence(form);
     if (err) return log(`ensayo: ${err}`, true);
     setPwmUi(0, 0);
-    const ack = await cmd('run', { motor: form.motor, seq, period_ms: form.period });
+    setRefUi(0);
+    const ack = await cmd('run', { motor: form.motor, kind: form.kind, seq, period_ms: form.period });
     if (ack.ok) {
       setView('ensayos');
       waitingCapture = bench?.cap.id ?? null;
@@ -575,7 +759,15 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
     recent.push(...fs);
     if (recent.length > 50) recent.splice(0, recent.length - 50);
     const z = zero;
-    liveTraces.push(fs.map((f) => ({ ...f, zL: f.cL - z.cL, zR: f.cR - z.cR })));
+    liveTraces.push(
+      fs.map((f) => {
+        const rpm = f.mode === 'rpm';
+        return {
+          ...f, zL: f.cL - z.cL, zR: f.cR - z.cR,
+          ref: rpm ? f.ref : null, uF: rpm ? f.uF : null, uP: rpm ? f.uP : null, uI: rpm ? f.uI : null,
+        };
+      }),
+    );
   });
   gw.on('status', (s) => {
     if (s.state !== 'connected') {
@@ -648,15 +840,68 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
     const cR = c.rows.map((r) => r[4]);
     const rpmL = rpmFromCounts(t, cL, h, cpw);
     const rpmR = rpmFromCounts(t, cR, h, cpw);
+    const isRpm = c.kind === 'rpm' && c.rows[0]?.length > 5;
+    const ref = c.rows.map((r) => (isRpm ? r[5] / 10 : null));
     capTraces.load(t, {
-      rpmL, rpmR, cL, cR,
+      rpmL, rpmR, cL, cR, ref,
       pwmL: c.rows.map((r) => r[1]),
       pwmR: c.rows.map((r) => r[2]),
     });
     const res = (60 / (cpw * 2 * h * c.period_ms * 1e-3)).toFixed(2);
+    const lazo = isRpm && c.cfg
+      ? `lazo Kp ${c.cfg.kp} · Ki ${c.cfg.ki} · período ${c.cfg.ts_ms} ms · ventana ${c.cfg.win_ms} ms · prealim. ${c.cfg.ff ? 'sí' : 'no'} · `
+      : '';
     $('motEnsMeta').textContent =
-      `motor ${c.motor} · muestreo ${c.period_ms} ms · ventana ${2 * h * c.period_ms} ms → resolución ${res} RPM por cuenta · ${cpw} cuentas/vuelta`;
-    renderSegments(c, t, cL, cR, rpmL, rpmR, cpw);
+      `${isRpm ? 'RPM · ' + lazo : ''}motor ${c.motor} · muestreo ${c.period_ms} ms · ventana ${2 * h * c.period_ms} ms → resolución ${res} RPM por cuenta · ${cpw} cuentas/vuelta`;
+    if (isRpm) renderStepMetrics(c, t, cR, rpmR, cpw);
+    else renderSegments(c, t, cL, cR, rpmL, rpmR, cpw);
+  }
+
+  /**
+   * Ensayo de RPM: por tramo, RPM media en régimen (segunda mitad, de las cuentas), error y, si
+   * la referencia cambió, subida 10–90 %, sobrepico y establecimiento (banda ±5 % del cambio,
+   * mínimo ±1.5 RPM por el ruido de medición).
+   */
+  function renderStepMetrics(c: Capture, t: number[], cR: number[], rpm: (number | null)[], cpw: number) {
+    let start = 0;
+    let prev = 0;
+    const lines = c.seq.map(([r1, ms], i) => {
+      const t0 = start;
+      const end = start + ms / 1000;
+      start = end;
+      const r0 = prev;
+      prev = r1;
+      const idx = t.map((v, k) => (v >= t0 && v < end ? k : -1)).filter((k) => k >= 0);
+      const half = idx.filter((k) => t[k] >= t0 + (end - t0) / 2);
+      let mean: number | null = null;
+      if (half.length > 1) {
+        const a = half[0];
+        const b = half[half.length - 1];
+        mean = ((cR[b] - cR[a]) / cpw / (t[b] - t[a])) * 60;
+      }
+      const d = r1 - r0;
+      let rise = '—';
+      let over = '—';
+      let settle = '—';
+      if (Math.abs(d) >= 0.5 && idx.length > 2) {
+        const frac = (k: number) => ((rpm[k] ?? r0) - r0) / d;
+        const k10 = idx.find((k) => frac(k) >= 0.1);
+        const k90 = idx.find((k) => frac(k) >= 0.9);
+        if (k10 !== undefined && k90 !== undefined) rise = ((t[k90] - t[k10]) * 1000).toFixed(0);
+        const peak = Math.max(...idx.map(frac));
+        over = Math.max(0, (peak - 1) * 100).toFixed(0);
+        const band = Math.max(0.05 * Math.abs(d), 1.5);
+        const out = idx.filter((k) => Math.abs((rpm[k] ?? r0) - r1) > band);
+        const lastOut = out.length ? out[out.length - 1] : idx[0];
+        settle = lastOut === idx[idx.length - 1] ? 'no' : ((t[lastOut] - t0) * 1000 + c.period_ms).toFixed(0);
+      }
+      const err = mean == null ? null : r1 - mean;
+      return `<tr><td>${i + 1}</td><td>${r1}</td><td>${ms}</td><td>${fmt(mean, 2)}</td><td>${fmt(err, 2)}</td><td>${rise}</td><td>${over}</td><td>${settle}</td></tr>`;
+    });
+    $('motTramos').innerHTML = `
+      <thead><tr><th>Tramo</th><th>Ref [RPM]</th><th>ms</th><th>RPM der.</th><th>Error</th><th>Subida 10–90 [ms]</th><th>Sobrepico [%]</th><th>Estab. [ms]</th></tr></thead>
+      <tbody>${lines.join('')}</tbody>
+      <tfoot><tr><td colspan="8" class="muted" style="text-align:left">RPM media y error en la segunda mitad del tramo. Subida, sobrepico y establecimiento (±5 % del cambio, mínimo ±1.5 RPM) con la RPM de la ventana elegida.</td></tr></tfoot>`;
   }
 
   /** Por tramo: RPM media (cuentas en la segunda mitad / tiempo) y desviación de la RPM con ventana. */
@@ -759,6 +1004,20 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
     $<HTMLButtonElement>('motSalir').disabled = !active || running;
     const canDrive = active && !running && !estop;
     root.querySelectorAll<HTMLInputElement | HTMLButtonElement>('.mot-pwm input, .mot-pwm button, #motCeros').forEach((el) => (el.disabled = !canDrive));
+    const rpmFw = bench?.rpmcfg !== undefined;
+    root.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#rpmRow input, #rpmRow button').forEach((el) => (el.disabled = !canDrive || !rpmFw));
+    $<HTMLButtonElement>('rpmAplicar').disabled = !active || !rpmFw;
+    segKind.querySelector<HTMLButtonElement>('[data-v="rpm"]')!.disabled = !rpmFw && on;
+    const loopOn = active && last?.mode === 'rpm';
+    const rpmPill = $('rpmEstado');
+    rpmPill.textContent = !active ? '—' : !rpmFw ? 'requiere fw 0.7.0' : loopOn ? 'lazo activo' : 'PWM manual';
+    rpmPill.className = loopOn ? 'pill ok' : 'pill';
+    if (loopOn && last) {
+      $('rpmMedida').textContent =
+        `ref ${fmt(last.ref, 1)} · medida ${fmt(last.y, 1)} RPM · PWM ${last.pwmR} = prealim. ${fmt(last.uF, 1)} + P ${fmt(last.uP, 1)} + I ${fmt(last.uI, 1)}`;
+    } else if (active) {
+      $('rpmMedida').textContent = 'Mueve la referencia para activar el lazo. El izquierdo recibe el mismo PWM si está como seguidor.';
+    }
     $('motManualHint').textContent = active && estop ? 'parada activa: Armar' : '';
     $<HTMLButtonElement>('motEjecutar').disabled = !canDrive || !!$('motEjecutar').dataset.invalid;
     $<HTMLButtonElement>('motDetener').disabled = !active;
@@ -782,6 +1041,8 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
       if (ack.ok) {
         bench = ack.bench as BenchStatus;
         if (bench.on) setPwmUi(bench.pwm[0], bench.pwm[1]);
+        if (bench.on && bench.mode === 'rpm') setRefUi(bench.ref ?? 0);
+        fillCfg(bench.rpmcfg);
         render();
       }
     }

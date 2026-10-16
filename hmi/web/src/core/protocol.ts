@@ -44,6 +44,12 @@ export interface MotFrame {
   eRB: number;
   lv: number; // nivel de los pines: bit0 L_A, bit1 L_B, bit2 R_A, bit3 R_B
   es: number; // 1 = parada de emergencia activa
+  mode?: 'pwm' | 'rpm'; // fw ≥ 0.7.0: de dónde sale el mando
+  ref?: number; // referencia del lazo de RPM
+  y?: number; // RPM que mide el lazo (ventana win_ms)
+  uF?: number; // prealimentación [PWM]
+  uP?: number; // término proporcional [PWM]
+  uI?: number; // término integral [PWM]
   cs: CapState; // estado del ensayo
   ci: number; // id del ensayo en el robot
   ck: number; // muestras tomadas
@@ -59,13 +65,30 @@ export interface EncInfo {
   single_l?: boolean; // fw ≥ 0.6.2: encoder izquierdo de un solo canal (sentido por el PWM)
 }
 
+/** Configuración del lazo de RPM (fw ≥ 0.7.0). */
+export interface RpmConfig {
+  kp: number;
+  ki: number;
+  ts_ms: number;
+  win_ms: number;
+  ff: boolean;
+  ff_k: number;
+  ff_b: number;
+  i_max: number;
+  follow: boolean;
+}
+
 /** Estado del banco (respuesta a "bench"). */
 export interface BenchStatus {
   on: boolean;
   estop: boolean;
+  mode?: 'pwm' | 'rpm';
   pwm: [number, number];
+  ref?: number;
   max_samples: number;
-  cap: { id: number; st: CapState; n: number; total: number; period_ms?: number; motor?: string; seq?: [number, number][] };
+  max_rpm?: number;
+  rpmcfg?: RpmConfig;
+  cap: { id: number; st: CapState; n: number; total: number; kind?: 'pwm' | 'rpm'; period_ms?: number; motor?: string; seq?: [number, number][] };
 }
 
 /** Ensayo guardado en la base del PC. `rows`: [t_us, pwmL, pwmR, cL, cR]. */
@@ -82,7 +105,9 @@ export interface Capture {
   enc: EncInfo | null;
   n: number;
   notes: string | null;
-  rows?: [number, number, number, number, number][];
+  kind?: 'pwm' | 'rpm'; // fw ≥ 0.7.0
+  cfg?: Partial<RpmConfig> | null; // lazo usado en un ensayo de RPM
+  rows?: number[][]; // [t_us, pwmL, pwmR, cL, cR(, ref·10)]
 }
 
 export interface Status {
