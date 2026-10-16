@@ -99,6 +99,7 @@ static void TaskBalanceo(void *pvParameters)
       dt = nominalDt;
 
     float angle = updateAngle(dt);
+    mpuLearnYawBias(!active); // deriva del giroscopio z: se aprende con el control apagado
     float rpmL_f, rpmR_f;
     updateWheelRPM(dt, rpmL_f, rpmR_f);
 
@@ -130,9 +131,11 @@ static void TaskBalanceo(void *pvParameters)
     const bool rpmCascade = p.structure == ControlStructure::RpmCascade;
     if (active && rpmCascade)
     {
-      // M3: la prealimentación del lazo de RPM ya compensa la zona muerta
-      pwm = pwmMotor = rpmCascadeStep(p, angle, getAngularRate(), periodMs, dt);
-      driveMotorsDifferential(pwmMotor, pwmMotor); // izquierdo: seguidor
+      // M3/M4: la prealimentación del lazo de RPM ya compensa la zona muerta; el izquierdo
+      // recibe el mismo PWM más la corrección de rumbo
+      const CascadeOutput out = rpmCascadeStep(p, angle, getAngularRate(), getYawRate(), periodMs, dt);
+      pwm = pwmMotor = out.pwmR;
+      driveMotorsDifferential(out.pwmL, out.pwmR);
       cs = rpmCascadeState();
       terms = {cs.uP, cs.uI, 0.0f};
     }
@@ -151,7 +154,8 @@ static void TaskBalanceo(void *pvParameters)
       RobotState state = active ? RobotState::Active : (stopNow ? RobotState::EStop : RobotState::Idle);
       Telemetry t = {seq++, millis(), angle, rpmCascade ? p.setpointAngle : getAngleReference(), getAngularRate(),
                      pwm, pwmMotor, rpmL_f, rpmR_f, getKpAngle(), dt, terms.p, terms.i, terms.d,
-                     cs.rpmRef, cs.accel, cs.rpmMeas, cs.uF, state};
+                     cs.rpmRef, cs.accel, cs.rpmMeas, cs.uF, cs.xCm, cs.xRefCm, cs.vRef, cs.psi, cs.psiRef,
+                     rpmCascade ? getYawRate() : 0.0f, cs.dL, state};
       if (xQueueSend(telemetryQueue, &t, 0) != pdTRUE)
         dropped.fetch_add(1);
     }

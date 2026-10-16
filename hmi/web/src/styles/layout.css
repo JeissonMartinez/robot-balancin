@@ -74,7 +74,7 @@ main{
   main{grid-template-columns:minmax(0,1fr); gap:10px; display:flex; flex-direction:column; align-items:stretch;
        padding-bottom:calc(72px + env(safe-area-inset-bottom))}
   .col, .side-scroll{display:contents}
-  #cardSeguridad{order:1} #cardConexion{order:2} .tiles{order:3} #cardVista{order:4} #cardWifi{order:5}
+  #cardSeguridad{order:1} #cardConducir{order:5} #cardConexion{order:2} .tiles{order:3} #cardVista{order:4} #cardWifi{order:5}
   #cardParametros{order:6} #cardJuegos{order:7} #cardComandos{order:8} #cardRegistro{order:9} .pie{order:10}
 
   #cardSeguridad{position:sticky; top:0; z-index:20; border-radius:0 0 var(--r) var(--r); margin:0 -10px}
@@ -83,7 +83,7 @@ main{
   #cardSeguridad .btn.estop, #cardSeguridad .btn.arm{min-height:44px}
 
   body[data-m] .tiles, body[data-m] #cardVista, body[data-m] .side-scroll > *{display:none}
-  body[data-m="vivo"] .tiles, body[data-m="vivo"] #cardVista,
+  body[data-m="vivo"] .tiles, body[data-m="vivo"] #cardVista, body[data-m="vivo"] #cardConducir,
   body[data-m="hist"] #cardVista, body[data-m="mot"] #cardVista,
   body[data-m="ajustes"] #cardParametros, body[data-m="ajustes"] #cardJuegos,
   body[data-m="ajustes"] #cardWifi, body[data-m="ajustes"] #cardComandos,
@@ -250,6 +250,19 @@ table.mot-enc td{text-align:right; padding:3px 4px; border-top:1px solid var(--l
   .mot-panel .plots{overflow:visible}
   .mot-tramos{max-height:none}
 }
+
+/* ===================== conducir (M4) ===================== */
+.drv{display:grid; grid-template-columns:auto minmax(0,1fr); gap:12px; align-items:center}
+.drv-pad{display:grid; grid-template-columns:repeat(3,46px); grid-template-rows:repeat(3,46px); gap:4px}
+.drv-b{min-height:0; padding:0; font-size:18px; touch-action:none; user-select:none; -webkit-user-select:none}
+.drv-b[aria-pressed="true"]{background:var(--azul); border-color:var(--azul); color:#fff}
+.drv-stop{font-size:14px}
+.drv-ctl{display:flex; flex-direction:column; gap:8px; min-width:0}
+.drv-ctl input[type=range]{width:100%; accent-color:var(--azul)}
+.drv-ctl .field b{font-weight:400; letter-spacing:0; text-transform:none; color:var(--ink-2)}
+.drv-vivo{font-size:11px; color:var(--ink-2); overflow-wrap:anywhere}
+.drv-estado{font-size:12px}
+@media (max-width:700px){ .drv-pad{grid-template-columns:repeat(3,56px); grid-template-rows:repeat(3,56px)} }
 
 /* ===================== parada de emergencia ===================== */
 .safety{display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:8px}

@@ -7,7 +7,7 @@
    "AngleOuter",
    "RpmCascade"
   ],
-  "def": "SpeedOuter",
+  "def": "RpmCascade",
   "unit": "",
   "desc": "Estructura de control (SpeedOuter / AngleOuter / RpmCascade). Reinicia el controlador."
  },
@@ -289,5 +289,68 @@
   "def": 20,
   "unit": "ms",
   "desc": "Modelo de referencia del lazo de RPM (0 = sin modelo)."
+ },
+ {
+  "key": "k_x",
+  "type": "float",
+  "min": 0,
+  "max": 200,
+  "def": 40,
+  "unit": "RPM/s/vuelta",
+  "desc": "Término de posición: devuelve el robot a su sitio (mismo sentido que el desplazamiento)."
+ },
+ {
+  "key": "v_ref_max",
+  "type": "float",
+  "min": 0,
+  "max": 40,
+  "def": 20,
+  "unit": "RPM",
+  "desc": "Velocidad máxima que se puede pedir al conducir."
+ },
+ {
+  "key": "v_accel",
+  "type": "float",
+  "min": 1,
+  "max": 100,
+  "def": 20,
+  "unit": "RPM/s",
+  "desc": "Rampa de la velocidad pedida."
+ },
+ {
+  "key": "k_psi",
+  "type": "float",
+  "min": 0,
+  "max": 40,
+  "def": 5,
+  "unit": "PWM/°",
+  "desc": "Rumbo: corrección del izquierdo por grado de desvío."
+ },
+ {
+  "key": "k_r",
+  "type": "float",
+  "min": 0,
+  "max": 20,
+  "def": 2,
+  "unit": "PWM/(°/s)",
+  "desc": "Rumbo: corrección del izquierdo por °/s de giro no pedido."
+ },
+ {
+  "key": "yaw_sign",
+  "type": "sign",
+  "min": -1,
+  "max": 1,
+  "def": 1,
+  "unit": "",
+  "desc": "Signo de la corrección de rumbo (verificar: si el robot gira cada vez más, invertir)."
+ },
+ {
+  "key": "r_ref_max",
+  "type": "float",
+  "min": 0,
+  "max": 90,
+  "def": 30,
+  "unit": "°/s",
+  "desc": "Giro máximo que se puede pedir al conducir."
  }
 ]

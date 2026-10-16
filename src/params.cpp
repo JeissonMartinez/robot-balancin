@@ -3,10 +3,11 @@
 #include <stddef.h>
 
 // Cambiar si se modifica la estructura Params: invalida lo guardado en NVS.
-static const uint16_t PARAMS_LAYOUT_VERSION = 2;
-// Layout 1 (hasta fw 0.7.x): Params terminaba en useGyroDerivative. Los campos de M3 se
-// agregaron al final, así que un blob del layout 1 es un prefijo válido del actual.
-#define PARAMS_V1_SIZE offsetof(Params, cascadeSign)
+static const uint16_t PARAMS_LAYOUT_VERSION = 3;
+// Los campos nuevos se agregan siempre al final: un blob de un layout anterior es un prefijo
+// válido del actual. Tamaño de cada layout = posición del primer campo del siguiente.
+//   layout 1 (fw ≤ 0.7.x) termina en useGyroDerivative; layout 2 (fw 0.8.x) en rpmRefTauMs.
+static const size_t LAYOUT_SIZES[] = {0, offsetof(Params, cascadeSign), offsetof(Params, kX)};
 
 enum class ParamType : uint8_t
 {
@@ -62,6 +63,13 @@ static const ParamDesc DESCS[] = {
     {"rpm_ff_b", ParamType::Float, P(rpmFfB), 0, 20, "RPM", "Prealimentación: desplazamiento de la recta (zona muerta)."},
     {"rpm_win", ParamType::Int, P(rpmWinMs), 5, 40, "ms", "Ventana de medición de la RPM (múltiplo de 5 ms)."},
     {"rpm_ref_tau", ParamType::Int, P(rpmRefTauMs), 0, 100, "ms", "Modelo de referencia del lazo de RPM (0 = sin modelo)."},
+    {"k_x", ParamType::Float, P(kX), 0, 200, "RPM/s/vuelta", "Término de posición: devuelve el robot a su sitio (mismo sentido que el desplazamiento)."},
+    {"v_ref_max", ParamType::Float, P(vRefMax), 0, 40, "RPM", "Velocidad máxima que se puede pedir al conducir."},
+    {"v_accel", ParamType::Float, P(vAccel), 1, 100, "RPM/s", "Rampa de la velocidad pedida."},
+    {"k_psi", ParamType::Float, P(kPsi), 0, 40, "PWM/°", "Rumbo: corrección del izquierdo por grado de desvío."},
+    {"k_r", ParamType::Float, P(kR), 0, 20, "PWM/(°/s)", "Rumbo: corrección del izquierdo por °/s de giro no pedido."},
+    {"yaw_sign", ParamType::Sign, P(yawSign), -1, 1, "", "Signo de la corrección de rumbo (verificar: si el robot gira cada vez más, invertir)."},
+    {"r_ref_max", ParamType::Float, P(rRefMax), 0, 90, "°/s", "Giro máximo que se puede pedir al conducir."},
 };
 static const size_t N_DESCS = sizeof(DESCS) / sizeof(DESCS[0]);
 
@@ -210,6 +218,13 @@ Params paramsFactory()
   p.rpmFfB = RPM_FF_B_DEFAULT;
   p.rpmWinMs = RPM_WIN_MS_DEFAULT;
   p.rpmRefTauMs = RPM_REF_TAU_MS_DEFAULT;
+  p.kX = K_X;
+  p.vRefMax = V_REF_MAX;
+  p.vAccel = V_ACCEL;
+  p.kPsi = K_PSI;
+  p.kR = K_R;
+  p.yawSign = YAW_SIGN;
+  p.rRefMax = R_REF_MAX;
   return p;
 }
 
@@ -233,8 +248,9 @@ void paramsInit()
   size_t take = 0;
   if (layout == PARAMS_LAYOUT_VERSION && len == sizeof(Params))
     take = sizeof(Params);
-  else if (layout == 1 && len <= PARAMS_V1_SIZE + 4 && len >= PARAMS_V1_SIZE)
-    take = PARAMS_V1_SIZE; // migración: lo guardado + valores de fábrica para lo nuevo
+  else if (layout >= 1 && layout < PARAMS_LAYOUT_VERSION && len >= LAYOUT_SIZES[layout] &&
+           len <= LAYOUT_SIZES[layout] + 4)
+    take = LAYOUT_SIZES[layout]; // migración: lo guardado + valores de fábrica para lo nuevo
   if (take)
   {
     Params stored = paramsFactory();

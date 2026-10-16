@@ -47,6 +47,14 @@ struct Params
   float rpmFfK, rpmFfB;  // prealimentación
   uint8_t rpmWinMs;      // ventana de medición [ms]
   uint8_t rpmRefTauMs;   // modelo de referencia [ms]
+  // --- M4 (layout 3) ---
+  float kX;              // [RPM/s por vuelta]
+  float vRefMax;         // [RPM]
+  float vAccel;          // [RPM/s]
+  float kPsi;            // [PWM/°]
+  float kR;              // [PWM/(°/s)]
+  float yawSign;         // ±1
+  float rRefMax;         // [°/s]
 };
 
 /** Carga de NVS (si hay un juego válido) o de fábrica. Llamar una vez en setup(). */

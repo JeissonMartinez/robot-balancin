@@ -6,7 +6,8 @@
  * - Ángulo de inclinación: atan2(ay, az) corregido con gx mediante filtro
  *   complementario 0.98 (giroscopio) / 0.02 (acelerómetro).
  * - Offsets guardados en Preferences, namespace "mpu", claves
- *   "ax_off", "ay_off", "az_off", "gx_off".
+ *   "ax_off", "ay_off", "az_off", "gx_off" y "gz_off" (desde fw 0.9.0).
+ * - Giro vertical (gz) para el rumbo: offset calibrado + deriva aprendida con el robot quieto.
  * - Todas las funciones usan el bus I2C: llamarlas sólo desde un contexto a la
  *   vez (setup(), TaskBalanceo, o loop() con el control en pausa).
  */
@@ -44,3 +45,12 @@ float updateAngle(float dt);
 
 /** @return Velocidad angular del eje de inclinación de la última lectura [°/s]. */
 float getAngularRate();
+
+/**
+ * @return Velocidad de giro alrededor del eje vertical (rumbo, M4b) [°/s], con el offset
+ *         calibrado (gz_off, desde fw 0.9.0) y la deriva aprendida con el robot quieto.
+ */
+float getYawRate();
+
+/** Activa el aprendizaje de la deriva del giroscopio z (llamar con el control inactivo). */
+void mpuLearnYawBias(bool on);

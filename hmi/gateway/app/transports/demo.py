@@ -114,6 +114,7 @@ class DemoTransport(Transport):
                      "ip": "192.168.4.1", "clients": 0}
         self.mqtt = {"enabled": False, "host": "", "port": 1883, "connected": False, "topic": "balancin/balancin-demo"}
         self.bench = SimBench()
+        self.casc = SimCascade()  # estructura RpmCascade (M3/M4)
         self._task: asyncio.Task | None = None
         self._on_line: LineHandler | None = None
 
@@ -151,7 +152,6 @@ class DemoTransport(Transport):
         self._hello()
         loop = asyncio.get_running_loop()
         sim = SimRobot(self.params)
-        casc = SimCascade()  # estructura RpmCascade (M3)
         seq = 0
         t0 = next_t = loop.time()
         reported = (0, 0)
@@ -171,7 +171,7 @@ class DemoTransport(Transport):
                 continue
             self.bench.idle(int(PERIOD * 1000))
             if self.params["structure"] == "RpmCascade":
-                fields, fell = casc.step(self.params, self.estop)
+                fields, fell = self.casc.step(self.params, self.estop)
             else:
                 fields, fell = sim.step(self.params, self.estop)
             if fell:
@@ -275,6 +275,16 @@ class DemoTransport(Transport):
             return self._ack(mid, True, params=dict(self.params))
         if cmd == "bench":
             return self._bench_cmd(mid, msg)
+        if cmd == "drive":
+            if msg.get("home"):
+                self.casc.home()
+            else:
+                v, r = msg.get("v", 0), msg.get("r", 0)
+                if any(isinstance(x, bool) or not isinstance(x, (int, float)) for x in (v, r)):
+                    return self._ack(mid, False, "v (RPM) y r (°/s) deben ser números")
+                self.casc.drive(v, r)
+            c = self.casc
+            return self._ack(mid, True, drive={"v": c.v_cmd, "r": c.r_cmd, "home": c.homing})
         if cmd in ("calib", "deadband") and self.bench.on:
             return self._ack(mid, False, "el banco de motores está activo: salir del banco primero")
         if cmd in ("save", "calib", "deadband"):

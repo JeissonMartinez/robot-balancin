@@ -12,6 +12,7 @@ import { PoseIntegrator } from './scene/pose';
 import { RobotScene } from './scene/scene';
 import { setupHistory } from './ui/history';
 import { setupMotors } from './ui/motors';
+import { setupDrive } from './ui/drive';
 import { setupConnection } from './ui/connection';
 import { setupCommands } from './ui/commands';
 import { describeEvent, setupLog } from './ui/log';
@@ -25,7 +26,7 @@ import { ensureAccess } from './ui/login';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /** Debe coincidir con __version__ del gateway (hmi/gateway/app/__init__.py). */
-const HMI_VERSION = '0.8.0';
+const HMI_VERSION = '0.9.0';
 
 const gw = new Gateway();
 
@@ -38,6 +39,7 @@ setupParams($('parametros'), $('parHead'), gw, note);
 setupParamSets($('juegos'), gw, note);
 setupCommands($('comandos'), gw, note);
 setupWifi($('wifi'), gw, note);
+setupDrive($('conducir'), gw, note);
 
 // ------------------------------------------------------------ en vivo: escena y trazas
 const traces = new Traces($('plots'));

@@ -68,6 +68,20 @@ export const PLOTS: PlotDef[] = [
       { key: 'rr', label: 'deseada', slot: 3, dash: [6, 4], decimals: 1 },
     ],
   },
+  {
+    id: 'pos', title: 'Posición (M4)', unit: 'cm',
+    series: [
+      { key: 'x', label: 'x', slot: 1, decimals: 1 },
+      { key: 'xr', label: 'x ref', slot: 2, dash: [6, 4], decimals: 1 },
+    ],
+  },
+  {
+    id: 'yaw', title: 'Rumbo (M4b)', unit: '°',
+    series: [
+      { key: 'psi', label: 'ψ', slot: 1, decimals: 1 },
+      { key: 'psir', label: 'ψ ref', slot: 2, dash: [6, 4], decimals: 1 },
+    ],
+  },
 ];
 
 const RATE_HZ = 50;

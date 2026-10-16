@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.8.1"
+#define FW_VERSION "0.9.0"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -170,6 +170,27 @@ const float K_OMEGA = 8.0f;                  // [RPM/s por °/s]
 const float K_VEL = 2.0f;                    // [1/s]
 const float RPM_REF_MAX = 55.0f;             // Tope de la RPM deseada [RPM]
 const float RPM_FF_BLEND = 1.0f;             // [RPM] la prealimentación crece desde 0 hasta esta |r|
+
+// ===================== Posición, velocidad y rumbo (M4) ========
+// α += Kv·(RPM_ref − v_ref) + Kx·(x − x_ref),  x_ref += v_ref·dt   (x en vueltas de la rueda derecha)
+// Kx, como Kv, en el MISMO sentido de la posición: si el robot quedó adelante, se le pide
+// aceleración hacia adelante; así se inclina hacia atrás y vuelve. Kx = 40 sobre la sintonía de
+// M3 (Kθ 90, Kω 8, Kv 2): polo de posición en −0.4 rad/s (docs/control/M4).
+const float K_X = 40.0f;                     // [RPM/s por vuelta]
+const float V_REF_MAX = 20.0f;               // Velocidad máxima pedida desde la HMI [RPM] (≈ 7 cm/s)
+const float V_ACCEL = 20.0f;                 // Rampa de la velocidad pedida [RPM/s]
+// Rumbo (M4b): el izquierdo va en lazo abierto; el giroscopio z hace de «encoder» de la diferencia
+// entre ruedas. Δ = s_ψ·[Kψ·(ψ_ref − ψ) + Kr·(r_ref − ω_z)] se suma al PWM del izquierdo.
+// Planta aprox.: 1 PWM de diferencia ≈ 0.42 °/s de giro (0.25 RPM/PWM, rueda 6.5 cm, vía 11.6 cm).
+const float K_PSI = 5.0f;                    // [PWM/°]
+const float K_R = 2.0f;                      // [PWM/(°/s)]
+const float YAW_SIGN = 1.0f;                 // ±1: verificar en la prueba del rumbo
+const float R_REF_MAX = 30.0f;               // Giro máximo pedido [°/s]
+const float YAW_DELTA_MAX = 80.0f;           // Tope de la corrección del izquierdo [PWM]
+const uint32_t DRIVE_TIMEOUT_MS = 1000;      // Sin renovar el comando drive, v y r vuelven a 0
+const float HOME_GAIN = 0.5f;                // «Volver al inicio»: v = −HOME_GAIN·x_ref·60 [1/s], tope v_ref_max/2
+const float WHEEL_RADIUS_M = 0.0325f;        // Radio de rueda medido (rueda de 6.5 cm): posición en cm
+const float YAW_BIAS_TAU_S = 3.0f;           // Aprendizaje de la deriva de ω_z con el robot quieto
 
 // ===================== PRUEBA DE ZONA MUERTA ('d' por Serial) ==
 const int DEADBAND_TEST_MAX_PWM = 120;       // PWM máximo de la rampa

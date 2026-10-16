@@ -28,7 +28,7 @@ log = logging.getLogger("robot")
 PROTOCOL_VERSION = 1
 # Comandos que la HMI puede enviar. `tel` no: la telemetría la administra el gateway.
 CLIENT_COMMANDS = {"hello", "get", "schema", "set", "defaults", "save", "calib", "deadband", "estop", "arm", "wifi", "mqtt",
-                   "bench"}
+                   "bench", "drive"}
 TIMEOUTS = {"save": 6.0, "calib": 8.0, "deadband": 40.0}
 DEFAULT_TIMEOUT = 2.0
 TICK = 0.1  # s, período del lazo de reparto
@@ -301,7 +301,9 @@ class RobotLink:
         payload = {"cmd": cmd, **fields, "ok": ack.get("ok"), "err": ack.get("err")}
         if source:
             payload["source"] = source
-        self._event("cmd", payload)
+        # "drive" se renueva varias veces por segundo mientras se conduce: sólo se registra si falla
+        if cmd != "drive" or not ack.get("ok"):
+            self._event("cmd", payload)
         if ack.get("ok") and "params" in ack:
             self.params = ack["params"]
             await self.hub.broadcast({"type": "params", "params": self.params})

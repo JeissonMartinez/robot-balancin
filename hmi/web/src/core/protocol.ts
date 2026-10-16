@@ -25,6 +25,13 @@ export interface Frame {
   acc?: number; // aceleración de rueda pedida [RPM/s]
   ym?: number; // RPM que mide el lazo de RPM
   uF?: number; // prealimentación del lazo de RPM [PWM]
+  x?: number; // fw ≥ 0.9.0 (M4): posición [cm]
+  xr?: number; // referencia de posición [cm]
+  vr?: number; // velocidad pedida [RPM]
+  psi?: number; // rumbo [°]
+  psir?: number; // referencia de rumbo [°]
+  wz?: number; // giro vertical [°/s]
+  dl?: number; // corrección del izquierdo [PWM]
   st: RobotState;
 }
 

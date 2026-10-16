@@ -6,7 +6,7 @@ from pathlib import Path
 from app.transports.demo import SimRobot
 
 SCHEMA = json.loads((Path(__file__).parent.parent / "app/transports/demo_schema.json").read_text(encoding="utf-8"))
-DEFAULTS = {d["key"]: d["def"] for d in SCHEMA}
+DEFAULTS = {**{d["key"]: d["def"] for d in SCHEMA}, "structure": "SpeedOuter"}  # SimRobot: estructuras con PWM
 
 
 def run(params, seconds=60):

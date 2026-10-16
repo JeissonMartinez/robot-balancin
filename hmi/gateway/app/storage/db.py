@@ -29,6 +29,9 @@ TEL_FIELDS = [
     ("kp", "kp"), ("dt", "dt"), ("uP", "u_p"), ("uI", "u_i"), ("uD", "u_d"), ("st", "st"),
     # RpmCascade (fw ≥ 0.8.0)
     ("rr", "rr"), ("acc", "acc"), ("ym", "ym"), ("uF", "u_f"),
+    # M4 (fw ≥ 0.9.0)
+    ("x", "x_cm"), ("xr", "x_ref_cm"), ("vr", "v_ref"), ("psi", "psi"), ("psir", "psi_ref"), ("wz", "wz"),
+    ("dl", "d_l"),
 ]
 
 DDL = """
@@ -49,7 +52,8 @@ CREATE TABLE IF NOT EXISTS telemetry (
     seq INTEGER, t_ms INTEGER,
     ang REAL, ref REAL, w REAL, pwm REAL, pwm_m REAL, rpm_l REAL, rpm_r REAL,
     kp REAL, dt REAL, u_p REAL, u_i REAL, u_d REAL, st TEXT,
-    rr REAL, acc REAL, ym REAL, u_f REAL
+    rr REAL, acc REAL, ym REAL, u_f REAL,
+    x_cm REAL, x_ref_cm REAL, v_ref REAL, psi REAL, psi_ref REAL, wz REAL, d_l REAL
 );
 CREATE INDEX IF NOT EXISTS telemetry_session_t ON telemetry(session_id, t_ms);
 CREATE TABLE IF NOT EXISTS events (
@@ -115,7 +119,7 @@ class Database:
                 if col not in cols:
                     self._con.execute(f"ALTER TABLE captures ADD COLUMN {col} TEXT")
             cols = {r[1] for r in self._con.execute("PRAGMA table_info(telemetry)")}
-            for col in ("rr", "acc", "ym", "u_f"):
+            for col in ("rr", "acc", "ym", "u_f", "x_cm", "x_ref_cm", "v_ref", "psi", "psi_ref", "wz", "d_l"):
                 if col not in cols:
                     self._con.execute(f"ALTER TABLE telemetry ADD COLUMN {col} REAL")
             self._con.execute(f"PRAGMA user_version={SCHEMA_VERSION}")

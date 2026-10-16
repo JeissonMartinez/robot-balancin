@@ -51,6 +51,12 @@ struct Telemetry
   float accel;    // aceleración de rueda pedida [RPM/s]
   float rpmMeas;  // RPM que mide el lazo de RPM (ventana)
   float uF;       // prealimentación del lazo de RPM [PWM]
+  // M4 (RpmCascade); 0 en las otras estructuras
+  float xCm, xRefCm; // posición y referencia [cm]
+  float vRef;     // velocidad pedida [RPM]
+  float psi, psiRef; // rumbo y referencia [°]
+  float yawRate;  // ω_z [°/s]
+  float dL;       // corrección del izquierdo [PWM]
   RobotState state;
 };
 
