@@ -12,6 +12,8 @@
  * - Diagnóstico (banco de motores): contadores de flancos de cada canal por separado,
  *   con interrupciones que sólo se activan en el banco, y nivel actual de cada pin.
  *   Si un canal no tiene flancos, el PCNT no puede contar (cuadratura sin una fase).
+ * - ENC_L_SINGLE_CHANNEL: el izquierdo cuenta sólo los flancos de A (x2, cada uno vale 2
+ *   cuentas) con el sentido del último PWM aplicado a ese motor (motorDirectionL()).
  */
 #pragma once
 #include <Arduino.h>

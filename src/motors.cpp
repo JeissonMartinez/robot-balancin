@@ -24,6 +24,8 @@ static void setupMotorPWM(int pwmPin, ledc_channel_t pwmChannel, ledc_timer_t ti
   ledc_channel_config(&channel_conf);
 }
 
+static volatile int dirL = 1; // lo lee encoders.cpp (encoder izquierdo de un canal)
+
 static void setMotor(int in1, int in2, ledc_channel_t channel, float pwm)
 {
   int duty = constrain((int)fabsf(pwm), 0, 255);
@@ -57,6 +59,8 @@ void setupMotors()
 
 void driveMotorsDifferential(float pwmL, float pwmR)
 {
+  if ((int)fabsf(pwmL) > 0)
+    dirL = pwmL > 0 ? 1 : -1;
   setMotor(AIN1, AIN2, CH_A, pwmL); // Motor izquierdo
   setMotor(BIN1, BIN2, CH_B, pwmR); // Motor derecho
 }
@@ -80,6 +84,11 @@ float compensateDeadband(float pwm, float deadband)
 void enableMotors()
 {
   digitalWrite(STBY, HIGH);
+}
+
+int motorDirectionL()
+{
+  return dirL;
 }
 
 void stopMotors()

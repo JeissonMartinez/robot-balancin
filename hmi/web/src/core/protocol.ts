@@ -56,6 +56,7 @@ export interface EncInfo {
   decode: number; // cuentas por pulso (4)
   gear: number; // reducción
   cpw: number; // cuentas por vuelta de rueda
+  single_l?: boolean; // fw ≥ 0.6.2: encoder izquierdo de un solo canal (sentido por el PWM)
 }
 
 /** Estado del banco (respuesta a "bench"). */

@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.6.1"
+#define FW_VERSION "0.6.2"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -89,9 +89,14 @@ const uint32_t ENC_GLITCH_NS = 10000;
 // La telemetría mostró RPM negativas con PWM positivo; verificar girando cada rueda a mano.
 const int ENC_L_SIGN = -1;
 const int ENC_R_SIGN = -1;
-// Encoder izquierdo defectuoso (no cuenta al girar la rueda a mano y mete picos de ruido
-// con los motores en marcha): la velocidad del robot se toma sólo de la rueda derecha.
+// Encoder izquierdo defectuoso (sensor B dañado, M0): la velocidad del robot se toma sólo de
+// la rueda derecha.
 const bool USE_LEFT_ENCODER = false;
+// Encoder izquierdo de un solo canal (provisional, hasta reemplazar el motor): el PCNT cuenta
+// los flancos de A (x2, cada flanco vale 2 cuentas para mantener PPR_WHEEL) y el sentido se
+// toma del último PWM distinto de 0 aplicado a ese motor. Falla mientras la rueda gira contra
+// el PWM (inversiones, frenado, rueda empujada): no sirve para equilibrar. false = cuadratura x4.
+const bool ENC_L_SINGLE_CHANNEL = true;
 
 // ===================== BANCO DE MOTORES (bench.h) ==============
 // Pruebas de lazo abierto de cada motor con el robot sobre un soporte (ruedas en el aire).

@@ -1,5 +1,6 @@
 #include "encoders.h"
 #include "config.h"
+#include "motors.h"
 #include <driver/pcnt.h>
 #include <esp_timer.h>
 #include <soc/gpio_reg.h>
@@ -56,6 +57,18 @@ static void configChannel(pcnt_unit_t unit, pcnt_channel_t ch, int edgePin, int 
  * nivel de A. Las acciones dan −1 por flanco cuando A adelanta a B, igual que la
  * interrupción de la versión anterior (step = A == B ? +1 : −1 en cada flanco de A).
  */
+/** Un solo canal: cada flanco de A suma +1, sin mirar B (el sentido lo pone pollLocked). */
+static void setupSingleChannelUnit(pcnt_unit_t unit, int pinA)
+{
+  configChannel(unit, PCNT_CHANNEL_0, pinA, PCNT_PIN_NOT_USED, PCNT_COUNT_INC, PCNT_COUNT_INC);
+  configChannel(unit, PCNT_CHANNEL_1, PCNT_PIN_NOT_USED, PCNT_PIN_NOT_USED, PCNT_COUNT_DIS, PCNT_COUNT_DIS);
+  ESP_ERROR_CHECK(pcnt_set_filter_value(unit, GLITCH_CYCLES));
+  ESP_ERROR_CHECK(pcnt_filter_enable(unit));
+  ESP_ERROR_CHECK(pcnt_counter_pause(unit));
+  ESP_ERROR_CHECK(pcnt_counter_clear(unit));
+  ESP_ERROR_CHECK(pcnt_counter_resume(unit));
+}
+
 static void setupQuadratureUnit(pcnt_unit_t unit, int pinA, int pinB)
 {
   configChannel(unit, PCNT_CHANNEL_0, pinA, pinB, PCNT_COUNT_INC, PCNT_COUNT_DEC);
@@ -84,8 +97,13 @@ static void pollLocked()
   {
     int16_t v = 0;
     pcnt_get_counter_value(units[i], &v);
-    total[i] += wrapDelta((int32_t)v - prevRaw[i]);
+    int32_t d = wrapDelta((int32_t)v - prevRaw[i]);
     prevRaw[i] = v;
+    // Un canal: flancos de A siempre positivos. Cada flanco vale 2 cuentas (x2 → unidades de x4)
+    // y el sentido es el del PWM, en la convención cruda (sin ENC_L_SIGN, que se aplica después)
+    if (i == 0 && ENC_L_SINGLE_CHANNEL)
+      d = 2 * d * ENC_L_SIGN * motorDirectionL();
+    total[i] += d;
   }
 }
 
@@ -112,7 +130,10 @@ void setupEncoders()
   pinMode(L_A, INPUT_PULLUP);
   pinMode(L_B, INPUT_PULLUP);
 
-  setupQuadratureUnit(UNIT_L, L_A, L_B);
+  if (ENC_L_SINGLE_CHANNEL)
+    setupSingleChannelUnit(UNIT_L, L_A);
+  else
+    setupQuadratureUnit(UNIT_L, L_A, L_B);
   setupQuadratureUnit(UNIT_R, R_A, R_B);
 
   esp_timer_create_args_t args = {};

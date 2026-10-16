@@ -39,3 +39,6 @@ void enableMotors();
 
 /** Pone el duty a 0 en ambos canales y STBY en LOW. */
 void stopMotors();
+
+/** Sentido del último PWM distinto de 0 aplicado al motor izquierdo: +1 adelante, −1 atrás. */
+int motorDirectionL();

@@ -515,6 +515,12 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
         return { text: `${name}: con PWM ${pwm > 0 ? 'positivo' : 'negativo'} la RPM sale ${rpm > 0 ? 'positiva' : 'negativa'}: invertir ENC_${side}_SIGN en config.h.`, cls: 'warn' };
     }
     if (eA + eB < 8) return { text: `${name}: sin movimiento desde el cero. Girar la rueda o aplicar PWM.`, cls: '' };
+    if (side === 'L' && enc().single_l) {
+      return {
+        text: `${name}: modo de un canal (ENC_L_SINGLE_CHANNEL). Cuenta los flancos de A (${eA}) con el sentido del último PWM; B no se usa (${eB} flancos). Al girar a mano el sentido es el del último PWM aplicado.`,
+        cls: eA ? 'info' : 'warn',
+      };
+    }
     const lo = Math.min(eA, eB);
     const hi = Math.max(eA, eB);
     if (lo === 0 || lo / hi < 0.1) {

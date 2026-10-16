@@ -60,6 +60,7 @@ void protocolHello(Print &out)
   enc["decode"] = ENC_DECODE;
   enc["gear"] = GEAR_RATIO;
   enc["cpw"] = PPR_WHEEL;
+  enc["single_l"] = ENC_L_SINGLE_CHANNEL;
   doc["bench"] = true;
   send(doc, out);
 }
