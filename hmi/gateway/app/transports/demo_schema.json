@@ -205,7 +205,7 @@
   "type": "float",
   "min": 0,
   "max": 400,
-  "def": 110,
+  "def": 90,
   "unit": "RPM/s/°",
   "desc": "Aceleración de rueda por grado de error (RpmCascade)."
  },
@@ -214,7 +214,7 @@
   "type": "float",
   "min": 0,
   "max": 40,
-  "def": 9.5,
+  "def": 8,
   "unit": "RPM/s/(°/s)",
   "desc": "Aceleración de rueda por °/s del giroscopio (RpmCascade)."
  },
@@ -223,7 +223,7 @@
   "type": "float",
   "min": 0,
   "max": 10,
-  "def": 1.5,
+  "def": 2,
   "unit": "1/s",
   "desc": "Término de velocidad: acelera en el sentido de la marcha para inclinarse y frenar (RpmCascade)."
  },

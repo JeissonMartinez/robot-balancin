@@ -13,7 +13,7 @@ Firmware para un **robot balancín** (péndulo invertido sobre dos ruedas) basad
 ## ✨ Características principales
 
 - 🦾 **Tres estructuras de control** que se eligen en ejecución (parámetro `structure`), sin perder los parámetros de ninguna. `RpmCascade` (fw 0.8.0) es la nueva cascada ángulo → aceleración → RPM → PWM, sin red neuronal; las otras dos:
-  - `SpeedOuter` (activa por defecto): estructura estándar de balancín. Un PI de velocidad fija el ángulo deseado y un PD de ángulo genera el PWM. Mantiene el robot en su sitio.
+  - `SpeedOuter` (por defecto hasta fw 0.8.0; desde 0.8.1 arranca `RpmCascade`): estructura estándar de balancín. Un PI de velocidad fija el ángulo deseado y un PD de ángulo genera el PWM. Mantiene el robot en su sitio.
   - `AngleOuter`: estructura original. Un PID de ángulo genera una referencia de velocidad y un PI de velocidad genera el PWM.
 - 🧠 **Red neuronal** (3-3-1, librería local `Neural_Networks_FF`) que adapta `Kp` entre `KP_MIN` y `KP_MAX`. Si ambos valen lo mismo, `Kp` queda fija.
 - 📐 **Ángulo** con filtro complementario (0.98 giroscopio / 0.02 acelerómetro) y el filtro pasa-bajas interno del MPU6050 a 42 Hz.
@@ -62,7 +62,7 @@ flowchart TD
     T --> A
 ```
 
-### Estructura `SpeedOuter` (por defecto)
+### Estructura `SpeedOuter`
 
 ```mermaid
 flowchart LR

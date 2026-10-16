@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.8.0"
+#define FW_VERSION "0.8.1"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -163,9 +163,11 @@ const uint8_t TELEMETRY_DIV_DEFAULT = 5;
 // Kv > 0 en el MISMO sentido de la velocidad: para frenar, el robot primero acelera un poco más
 // y así se inclina hacia atrás (término débil; el lazo de velocidad completo es M4).
 const float CASCADE_SIGN = -1.0f;
-const float K_THETA = 110.0f;                // [RPM/s por °]
-const float K_OMEGA = 9.5f;                  // [RPM/s por °/s]
-const float K_VEL = 1.5f;                    // [1/s]
+// Valores de fábrica = sintonía en el robot (M3, sesión 51 de la HMI, 2026-10-16). El cálculo
+// inicial daba Kθ 110, Kω 9.5, Kv 1.5; en el robot se bajó Kθ y Kω y se subió Kv.
+const float K_THETA = 90.0f;                 // [RPM/s por °]
+const float K_OMEGA = 8.0f;                  // [RPM/s por °/s]
+const float K_VEL = 2.0f;                    // [1/s]
 const float RPM_REF_MAX = 55.0f;             // Tope de la RPM deseada [RPM]
 const float RPM_FF_BLEND = 1.0f;             // [RPM] la prealimentación crece desde 0 hasta esta |r|
 
@@ -192,7 +194,9 @@ enum class ControlStructure
   SpeedOuter,
   RpmCascade // M3: ángulo → aceleración de rueda → ∫ → RPM deseada → lazo de RPM (M2) → PWM
 };
-const ControlStructure CONTROL_STRUCTURE = ControlStructure::SpeedOuter;
+// Desde fw 0.8.1 el robot arranca con RpmCascade (M3): equilibra mejor que SpeedOuter. Ojo: si
+// hay parámetros guardados en NVS, mandan ellos (también la estructura).
+const ControlStructure CONTROL_STRUCTURE = ControlStructure::RpmCascade;
 
 // --- Sólo SpeedOuter ---
 // PWM = ANGLE_LOOP_PWM_GAIN · (Kp_angle·e + Kd_angle·de/dt). Igual a Kp_speed de la estructura
@@ -209,7 +213,9 @@ const float MAX_TILT_REF_DEG = 4.0f;         // Límite del ángulo deseado que 
 const float SPEED_LOOP_SIGN = -1.0f;
 
 // ===================== GANANCIAS (valores de fábrica) ============
-const float SETPOINT_ANGLE = 0.0f;           // Referencia del lazo de ángulo [°]
+// Punto de equilibrio con la calibración actual del MPU (sesión 51: el robot se sostiene en
+// ≈ −2°). Si se recalibra el MPU con el robot en su punto de equilibrio, volver a 0.
+const float SETPOINT_ANGLE = -2.0f;          // Referencia del lazo de ángulo [°]
 const float KD_ANGLE = 1.25f;                // ≈ Kd = 1 de la sintonía manual (PWM ≈ 0.8·salida)
 const float KI_ANGLE = 1.0f;                 // Sólo AngleOuter
 const float KP_SPEED = 0.8f;                 // Sólo AngleOuter (lazo interno de velocidad)
