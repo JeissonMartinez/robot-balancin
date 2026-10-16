@@ -12,8 +12,8 @@ import random
 
 PPR_MOTOR = 11
 DECODE = 4
-GEAR = 119.0
-CPW = PPR_MOTOR * DECODE * GEAR  # cuentas por vuelta de rueda (5236)
+CPW = 2618.0  # cuentas por vuelta de rueda, medidas en el robot (PPR_WHEEL en config.h)
+GEAR = CPW / (PPR_MOTOR * DECODE)
 LIVE_MS = 20
 MAX_SAMPLES = 5000
 MAX_SEGMENTS = 16

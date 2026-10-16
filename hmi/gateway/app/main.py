@@ -64,7 +64,7 @@ class ParamSetRequest(BaseModel):
 def capture_to_csv(c: dict) -> str:
     """Muestras del ensayo y RPM de rueda por diferencia hacia adelante: la RPM de la fila k es
     la del intervalo [k, k+1], en el que estuvo aplicado el PWM de la fila k."""
-    cpw = (c.get("enc") or {}).get("cpw") or 5236
+    cpw = (c.get("enc") or {}).get("cpw") or 2618
     rows = c["rows"]
     out = [f"# ensayo {c['id']} · motor {c.get('motor')} · período {c.get('period_ms')} ms · "
            f"tramos {json.dumps(c.get('seq'))} · {cpw:g} cuentas por vuelta de rueda",

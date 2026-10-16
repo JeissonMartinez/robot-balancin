@@ -22,7 +22,7 @@ type Log = (m: string, bad?: boolean) => void;
 type Motor = 'L' | 'R' | 'LR';
 type Preset = 'escalon' | 'escalera' | 'idavuelta' | 'manual';
 
-const DEFAULT_ENC: EncInfo = { ppr: 11, decode: 4, gear: 119, cpw: 5236 };
+const DEFAULT_ENC: EncInfo = { ppr: 11, decode: 4, gear: 59.5, cpw: 2618 };
 const KEEPALIVE_MS = 10_000;
 const SEND_THROTTLE_MS = 120;
 const MAX_SEGMENTS = 16;
@@ -264,7 +264,7 @@ export function setupMotors(root: HTMLElement, gw: Gateway, log: Log) {
           <label class="field"><span>Vueltas dadas a mano</span><input type="number" id="encN" min="1" step="1" value="10"></label>
           <div class="mot-nota mono" id="encCpw"></div>
         </div>
-        <div class="mot-nota muted">Poner a cero, girar cada rueda a mano un número exacto de vueltas hacia adelante y comparar las cuentas por vuelta con las esperadas (<span id="encEsperadas">5236</span>).</div>
+        <div class="mot-nota muted">Poner a cero, girar cada rueda a mano un número exacto de vueltas hacia adelante y comparar las cuentas por vuelta con las esperadas (<span id="encEsperadas">2618</span>).</div>
       </section>
     </div>
 

@@ -6,7 +6,7 @@
 
 // El contador de 16 bits vuelve a 0 al llegar a ±PCNT_LIMIT. Se lee cada 10 ms (y en cada
 // consulta) y la diferencia módulo PCNT_LIMIT se suma a un total de 32 bits: no se pierde
-// ninguna cuenta mientras entre dos lecturas haya menos de PCNT_LIMIT/2 (≈ 2.4 s a 70 RPM).
+// ninguna cuenta mientras entre dos lecturas haya menos de PCNT_LIMIT/2 (≈ 4.9 s a 70 RPM).
 static const int16_t PCNT_LIMIT = 30000;
 static const uint32_t POLL_US = 10000;
 static const uint16_t GLITCH_CYCLES = ENC_GLITCH_NS * 80 / 1000; // reloj APB de 80 MHz

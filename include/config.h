@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.6.0"
+#define FW_VERSION "0.6.1"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -74,13 +74,16 @@ const ledc_timer_t TIMER_B = LEDC_TIMER_1;
 // velocidad máxima esperada ≈ 100 · 8.4/12 ≈ 70 RPM en la rueda.
 // Los encoders se leen con el contador de pulsos por hardware (PCNT) en cuadratura x4:
 // cuenta los flancos de subida y de bajada de A y de B (ver encoders.h).
-const int ENC_PPR_MOTOR = 11;                // Pulsos por canal por vuelta del eje del motor (a verificar, M0)
+const int ENC_PPR_MOTOR = 11;                // Pulsos por canal por vuelta del eje del motor (nominal)
 const int ENC_DECODE = 4;                    // Cuentas por pulso (x4)
 const int CPR = ENC_PPR_MOTOR * ENC_DECODE;  // Cuentas por vuelta del eje del motor
-const float GEAR_RATIO = 119.0f;             // Reducción de la caja
-const float PPR_WHEEL = CPR * GEAR_RATIO;    // Cuentas por vuelta de rueda
+// Medido (M0, P2): 52 361 cuentas en 20 vueltas de la rueda derecha = 2 618 por vuelta, la
+// mitad de 44 · 119. Desde la rueda no se distingue si cambia la reducción o los pulsos del
+// encoder; para el control sólo importa este número.
+const float PPR_WHEEL = 2618.0f;             // Cuentas por vuelta de rueda
+const float GEAR_RATIO = PPR_WHEEL / CPR;    // Reducción equivalente (≈ 59.5)
 // Filtro de glitches del PCNT: ignora pulsos más cortos que esto (máx. ≈ 12.7 µs). A 70 RPM
-// de rueda cada canal cambia cada ~330 µs y entre A y B pasan ~80 µs: 10 µs no pierde cuentas.
+// de rueda cada canal cambia cada ~650 µs y entre A y B pasan ~330 µs: 10 µs no pierde cuentas.
 const uint32_t ENC_GLITCH_NS = 10000;
 // Signo de cada encoder para que PWM > 0 (adelante) dé RPM > 0.
 // La telemetría mostró RPM negativas con PWM positivo; verificar girando cada rueda a mano.
@@ -118,7 +121,7 @@ const uint8_t TELEMETRY_DIV_DEFAULT = 5;
 // ===================== PRUEBA DE ZONA MUERTA ('d' por Serial) ==
 const int DEADBAND_TEST_MAX_PWM = 120;       // PWM máximo de la rampa
 const uint32_t DEADBAND_TEST_STEP_MS = 80;   // Tiempo en cada escalón de PWM
-// El encoder está en el eje del motor (antes de la reductora 1:119): al arrancar, el motor
+// El encoder está en el eje del motor (antes de la reductora): al arrancar, el motor
 // recorre primero el juego de los engranajes y genera pulsos sin que la rueda gire. Por eso
 // se exige giro sostenido y en el sentido pedido durante varios escalones seguidos.
 const long DEADBAND_TEST_PULSES = 8;         // Pulsos mínimos por escalón (en el sentido pedido)
@@ -147,7 +150,7 @@ const uint32_t SPEED_LOOP_PERIOD_MS = 100;   // Periodo del lazo externo (10 Hz)
 const float SPEED_REF_RPM = 0.0f;            // Velocidad deseada (0 = quedarse en su sitio)
 const float MAX_TILT_REF_DEG = 4.0f;         // Límite del ángulo deseado que pide el lazo externo
 // Signo del lazo externo: angle_ref = setpoint + SPEED_LOOP_SIGN · (Kp_v·v + Ki_v·∫v).
-// Con estos motorreductores (1:119, casi fuentes de velocidad) y un lazo interno PD, un ángulo
+// Con estos motorreductores (casi fuentes de velocidad) y un lazo interno PD, un ángulo
 // deseado > 0 se traduce en régimen permanente en avance (v ≈ 15 RPM por grado), así que el
 // signo +1 hacía realimentación positiva: el robot se alejaba cada vez más rápido. -1 = negativa.
 // Si con -1 el robot se aleja cada vez más rápido y Ref se queda en ±MAX_TILT_REF_DEG, volver a +1.
