@@ -108,8 +108,8 @@ Verificar el protocolo por WiFi: `hmi/gateway/.venv/bin/python hmi/tools/protoco
 - **Parada de emergencia**: botón rojo o tecla `Esc` (en el PC).
 - **Clave de acceso** (opcional): con `--clave` la HMI la pide una vez por equipo (se recuerda 30
   días; **Salir**, al pie, la olvida). Sin clave, cualquiera en la red puede mover el robot.
-- **Celular**: barra de Seguridad fija arriba y cinco pestañas abajo (En vivo, Historial, Motores,
-  Ajustes, Conexión). Se puede **agregar a la pantalla de inicio** (Safari: Compartir → Agregar a inicio;
+- **Celular**: barra de Seguridad fija arriba y cinco pestañas abajo (En vivo, con Conducir; Historial;
+  Motores; Ajustes; Conexión). Se puede **agregar a la pantalla de inicio** (Safari: Compartir → Agregar a inicio;
   Chrome: menú → Instalar app) y se abre como una app, sin la barra del navegador.
 - **Parámetros**: con **En vivo** cada cambio se envía al soltar el slider o confirmar el número
   (Enter). Sin **En vivo** los cambios se acumulan (borde dorado) y se envían juntos con
@@ -197,7 +197,8 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | `plots/` | Trazas con uPlot y leyenda propia; modo en vivo (ventana de 5–60 s) y modo reproducción (sesión completa, cabezal, cursor sincronizado con la escena) |
 | `scene/` | Escena del robot portada del Simulador_Balancin: `scene.ts` (2D y 3D en canvas), `pose.ts` (telemetría → pose; integra la posición desde las RPM), `geometry.ts` (medidas del robot para dibujarlo) |
 | `ui/history.ts` | Historial: lista de sesiones, gráficas reproducibles, tabla paginada, eventos, CSV, notas y borrado |
-| `ui/motors.ts` | Motores: banco de motores, PWM manual, ensayos, diagnóstico de encoders y trazas de cada rueda |
+| `ui/motors.ts` | Motores: banco de motores, PWM manual, lazo de RPM, ensayos, diagnóstico de encoders y trazas de cada rueda |
+| `ui/drive.ts` | Conducir: botones mantenidos y flechas del teclado, velocidad, giro y volver al inicio |
 | `styles/` | `tokens.css` (colores del Simulador_Balancin + paleta de series), `base.css`, `layout.css` |
 
 ### Estructura de `gateway/app`
@@ -207,7 +208,7 @@ cd hmi/gateway && .venv/bin/python -m pytest
 | `main.py` | Rutas REST y WebSocket; sirve `web/dist` si existe |
 | `robot.py` | `RobotLink`: configuración del robot, comandos con ack, sesiones, reparto de telemetría |
 | `hub.py` | Clientes WebSocket conectados |
-| `transports/` | `serial_port.py`, `websocket.py` (WiFi), `mqtt.py`, `demo.py` y `demo_bench.py` (robot simulado, con banco de motores) |
+| `transports/` | `serial_port.py`, `websocket.py` (WiFi), `mqtt.py`, `demo.py`, `demo_bench.py` y `demo_cascade.py` (robot simulado: banco de motores y estructura RpmCascade) |
 | `storage/db.py` | SQLite: sesiones, telemetría, eventos, juegos de parámetros, ensayos del banco |
 
 ### Tamaños de pantalla
@@ -262,6 +263,22 @@ Pestaña **Motores**, con el robot **sobre un soporte y las ruedas en el aire**:
   vueltas a mano (cuentas por vuelta medidas contra las esperadas).
 
 El robot simulado también tiene banco, para practicar sin hardware.
+
+- **Lazo de RPM** (fw ≥ 0.7.0): referencia de la rueda derecha en vivo y configuración del lazo
+  (Kp, Ki, período, ventana, prealimentación, modelo de referencia); ensayos en RPM con subida,
+  sobrepico, establecimiento y error por tramo.
+
+### Conducir (fw ≥ 0.9.0, estructura RpmCascade)
+
+Tarjeta **Conducir** (en el celular, en la pestaña En vivo), habilitada con el robot controlando:
+
+- Mantener pulsado ▲ ▼ (avanzar, retroceder) o ◀ ▶ (girar), o las **flechas del teclado** en el PC;
+  se pueden combinar. Al soltar, el robot se detiene.
+- Deslizadores de velocidad (RPM y cm/s) y de giro (°/s).
+- **Volver al inicio**: regresa a donde se armó el control.
+- Mientras se conduce, la HMI renueva el mando cada 200 ms; si se corta el enlace, el robot se
+  detiene solo a 1 s.
+- Trazas **Posición** y **Rumbo** con su referencia en la vista En vivo.
 
 ### Colores de las trazas
 

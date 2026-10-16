@@ -232,7 +232,7 @@
   "type": "float",
   "min": 5,
   "max": 60,
-  "def": 55,
+  "def": 60,
   "unit": "RPM",
   "desc": "Tope de la RPM deseada (RpmCascade)."
  },

@@ -257,6 +257,10 @@ void paramsInit()
     uint8_t raw[sizeof(Params)];
     prefs.getBytes("blob", raw, len);
     memcpy(&stored, raw, take);
+    // Lo guardado con fw ≤ 0.8.0 no conocía RpmCascade como estructura por defecto: al migrar,
+    // la estructura toma el valor de fábrica. Al guardar de nuevo ya queda la elegida.
+    if (layout < 3)
+      stored.structure = CONTROL_STRUCTURE;
     String err;
     if (validate(stored, err))
     {

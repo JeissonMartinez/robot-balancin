@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.9.0"
+#define FW_VERSION "0.9.1"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -163,20 +163,22 @@ const uint8_t TELEMETRY_DIV_DEFAULT = 5;
 // Kv > 0 en el MISMO sentido de la velocidad: para frenar, el robot primero acelera un poco más
 // y así se inclina hacia atrás (término débil; el lazo de velocidad completo es M4).
 const float CASCADE_SIGN = -1.0f;
-// Valores de fábrica = sintonía en el robot (M3, sesión 51 de la HMI, 2026-10-16). El cálculo
-// inicial daba Kθ 110, Kω 9.5, Kv 1.5; en el robot se bajó Kθ y Kω y se subió Kv.
-const float K_THETA = 90.0f;                 // [RPM/s por °]
+// Valores de fábrica = sintonía en el robot. M3 (sesión 51): Kθ 90, Kω 8, Kv 2 (el cálculo daba
+// 110, 9.5, 1.5). M4 (sesión 55): con el término de posición se bajó Kθ a 42.4 y se subió Kx: la
+// posición sigue a la referencia (ver K_X).
+const float K_THETA = 42.4f;                 // [RPM/s por °]
 const float K_OMEGA = 8.0f;                  // [RPM/s por °/s]
 const float K_VEL = 2.0f;                    // [1/s]
-const float RPM_REF_MAX = 55.0f;             // Tope de la RPM deseada [RPM]
+const float RPM_REF_MAX = 60.0f;             // Tope de la RPM deseada [RPM] (sesión 55)
 const float RPM_FF_BLEND = 1.0f;             // [RPM] la prealimentación crece desde 0 hasta esta |r|
 
 // ===================== Posición, velocidad y rumbo (M4) ========
 // α += Kv·(RPM_ref − v_ref) + Kx·(x − x_ref),  x_ref += v_ref·dt   (x en vueltas de la rueda derecha)
 // Kx, como Kv, en el MISMO sentido de la posición: si el robot quedó adelante, se le pide
-// aceleración hacia adelante; así se inclina hacia atrás y vuelve. Kx = 40 sobre la sintonía de
-// M3 (Kθ 90, Kω 8, Kv 2): polo de posición en −0.4 rad/s (docs/control/M4).
-const float K_X = 40.0f;                     // [RPM/s por vuelta]
+// aceleración hacia adelante; así se inclina hacia atrás y vuelve. El cálculo daba 40 sobre la
+// sintonía de M3; en el robot (sesión 55) quedó 152.4 con Kθ 42.4. Ojo: si θ0 no coincide con el
+// punto de equilibrio real, el robot se queda desplazado Kθ·Δθ/Kx (por eso conviene Kx alto).
+const float K_X = 152.4f;                    // [RPM/s por vuelta]
 const float V_REF_MAX = 20.0f;               // Velocidad máxima pedida desde la HMI [RPM] (≈ 7 cm/s)
 const float V_ACCEL = 20.0f;                 // Rampa de la velocidad pedida [RPM/s]
 // Rumbo (M4b): el izquierdo va en lazo abierto; el giroscopio z hace de «encoder» de la diferencia

@@ -23,6 +23,7 @@ export const GROUPS = [
   'Lazo de ángulo',
   'Lazo de velocidad',
   'Cascada RPM (M3)',
+  'Posición y rumbo (M4)',
   'Red neuronal (Kp adaptativa)',
   'Actuador y sensor',
   'Seguridad',
@@ -51,6 +52,14 @@ const UI: Record<string, ParamUi> = {
   rpm_ff_b: { label: 'Prealimentación B', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
   rpm_win: { label: 'Ventana de medición', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
   rpm_ref_tau: { label: 'Modelo de referencia (τ)', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+
+  k_x: { label: 'Kx (término de posición)', group: 'Posición y rumbo (M4)', only: 'RpmCascade' },
+  v_ref_max: { label: 'Velocidad máxima al conducir', group: 'Posición y rumbo (M4)', only: 'RpmCascade' },
+  v_accel: { label: 'Rampa de velocidad', group: 'Posición y rumbo (M4)', only: 'RpmCascade' },
+  k_psi: { label: 'Kψ (rumbo)', group: 'Posición y rumbo (M4)', only: 'RpmCascade' },
+  k_r: { label: 'Kr (giro)', group: 'Posición y rumbo (M4)', only: 'RpmCascade' },
+  yaw_sign: { label: 'Signo del rumbo', group: 'Posición y rumbo (M4)', only: 'RpmCascade' },
+  r_ref_max: { label: 'Giro máximo al conducir', group: 'Posición y rumbo (M4)', only: 'RpmCascade' },
 
   kp_v: { label: 'Kp velocidad', group: 'Lazo de velocidad', only: 'SpeedOuter' },
   ki_v: { label: 'Ki velocidad', group: 'Lazo de velocidad', only: 'SpeedOuter' },

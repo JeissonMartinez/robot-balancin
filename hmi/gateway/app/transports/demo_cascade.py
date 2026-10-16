@@ -1,6 +1,10 @@
 """Robot simulado en la estructura RpmCascade (M3 + M4): la misma ley de control del firmware
 (src/rpm_cascade.cpp) sobre un péndulo con la geometría medida y los motores de M1.
 
+Usa las ganancias del modelo (Kθ 90, Kx 40). El robot real equilibra con Kθ ≈ 42 y Kx ≈ 152
+(sesión 55), que en este modelo se caen: el robot real necesita bastante menos Kθ que lo que
+predice el modelo (docs/control/M4 §11).
+
 Modelo (el mismo del diseño, docs/control/M3_LAZO_ANGULO.md y M4_POSICION_VELOCIDAD.md):
     (l + r) · θ'' = g · sen θ − r · φ''·cos θ      θ > 0: inclinado hacia adelante
     φ' (RPM media de las ruedas respecto del cuerpo); cada rueda: primer orden hacia

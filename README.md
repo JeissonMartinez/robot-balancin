@@ -2,26 +2,132 @@
 
 > Basado en repositorio: `git@github.com:eatechnology1/Balancin-ControlRN.git`
 
-Firmware para un **robot balancín** (péndulo invertido sobre dos ruedas) basado en **ESP32-S3**. Su único objetivo es mantener el robot de pie. Para eso combina:
+Firmware y laboratorio web para un **robot balancín** (péndulo invertido sobre dos ruedas) basado en **ESP32-S3**.
 
-- **Control en cascada** de velocidad y ángulo, con dos estructuras seleccionables.
-- Una **red neuronal feed-forward** que ajusta en línea la ganancia proporcional (`Kp`) del lazo de ángulo.
-- **Compensación de la zona muerta** de los motores.
+- **Control en cascada `RpmCascade`** (por defecto desde fw 0.8.1): lazo de RPM de cada rueda → lazo de ángulo → lazo de posición, velocidad y rumbo. El robot se equilibra, vuelve a su sitio y se puede conducir.
+- Las estructuras anteriores (`SpeedOuter`, `AngleOuter`, con una **red neuronal** que ajusta `Kp`) siguen disponibles para comparar.
+- **HMI web** (carpeta `hmi/`): trazas en vivo, parámetros, banco de motores, conducción e historial, desde el PC, la tablet o el celular.
+
+> 🚀 ¿Primera vez? Ve directo a la [puesta en marcha paso a paso](#-puesta-en-marcha-paso-a-paso).
+
+---
+
+## 🚀 Puesta en marcha paso a paso
+
+### 0. Qué necesitas
+
+| Para | Necesitas |
+|---|---|
+| Cargar el firmware | Cable USB, [PlatformIO](https://platformio.org/install/cli) (CLI o la extensión de VS Code) |
+| Usar el robot | Batería LiPo 2S cargada (8.4 V) |
+| La HMI (opcional) | Python ≥ 3.11 y Node ≥ 20 |
+
+### 1. Descargar el código
+
+```bash
+git clone git@github.com:JeissonMartinez/robot-balancin.git
+```
+```bash
+cd robot-balancin
+```
+```bash
+git checkout feat/fw-cascada-rpm
+```
+
+### 2. Cargar el firmware
+
+1. **Desconecta el cable del encoder derecho** de la PCB (ver [por qué](#6-problemas-frecuentes)).
+2. Conecta el robot por USB.
+3. Pon el ESP32 en modo descarga: **mantén BOOT, pulsa y suelta RESET, suelta BOOT**.
+4. Compila y carga:
+   ```bash
+   pio run -t upload
+   ```
+5. Reconecta el encoder derecho y pulsa **RESET** una vez.
+
+### 3. Primer encendido
+
+1. Abre el monitor serie para ver qué pasa (opcional):
+   ```bash
+   pio device monitor
+   ```
+   Al arrancar imprime la versión, de dónde salen los parámetros y la estructura de control. Debe decir `RpmCascade`.
+2. Si nunca se calibró la IMU (el arranque dice «No existe calibración guardada»): pon el robot **quieto y vertical** y pulsa el botón de calibración (o la tecla `c` en el monitor).
+
+### 4. Usarlo sin la HMI
+
+1. Enciende el robot con la batería.
+2. Ponlo vertical en el piso, sosténlo suave y suéltalo: el control se activa solo cuando el ángulo baja de 5° y el robot se equilibra y se queda en su sitio.
+3. Si se cae (más de 40°), los motores se apagan. Vuelve a ponerlo vertical para reactivarlo.
+
+Si no arranca en `RpmCascade` (por ejemplo, tenía guardados parámetros de otra versión), vuelve a los valores de fábrica y guárdalos. En el monitor serie (paso 3), pega estas dos líneas, una a la vez:
+
+```
+{"type":"cmd","id":1,"cmd":"defaults"}
+```
+```
+{"type":"cmd","id":2,"cmd":"save"}
+```
+
+Teclas útiles en el monitor: `e` parada de emergencia, `a` liberarla, `p` ver los parámetros, `w` ver el WiFi, `?` ayuda ([lista completa](#comandos-por-el-monitor-serie)).
+
+### 5. Usarlo con la HMI
+
+**Arrancar** (desde la carpeta del repositorio; la primera vez instala todo y compila la interfaz, después sólo arranca):
+
+```bash
+hmi/iniciar.sh
+```
+
+Abre **http://127.0.0.1:8000** en el navegador. Desde el celular o la tablet, abre la dirección «HMI en la red» que imprime el comando (deben estar en la misma WiFi que el PC).
+
+**Conectar el robot** (tarjeta Conexión):
+
+| Transporte | Cómo |
+|---|---|
+| **USB** | Elegir el puerto del robot → Conectar. Cierra antes el monitor serie. |
+| **WiFi, red del robot** | Une el PC a la red `Balancin-XXXX` (clave `bal-xxxxxx`, la muestra la tecla `w`) → WiFi, dirección `192.168.4.1` → Conectar. |
+| **WiFi, tu red** | Si el robot está configurado en tu red local, une el PC a esa red → WiFi, dirección `balancin-xxxx.local` o su IP → Conectar. |
+
+**Qué hacer en la HMI:**
+
+- **En vivo:** ángulo, ruedas, posición y rumbo; escena 2D/3D.
+- **Conducir:** mantener pulsados los botones ▲▼◀▶ (o las flechas del teclado). Al soltar, el robot se detiene. «Volver al inicio» lo regresa a donde se armó.
+- **Parámetros:** ajustar en vivo. **«Guardar en el robot»** los deja para que arranque así sin la HMI.
+- **Motores:** banco de motores (con el robot sobre un soporte): diagnóstico de encoders, ensayos y lazo de RPM.
+- **Historial:** cada sesión queda guardada con su telemetría; se puede reproducir y exportar a CSV.
+- **Parada:** botón rojo o tecla `Esc`.
+
+Más detalle en [hmi/README.md](hmi/README.md).
+
+### 6. Problemas frecuentes
+
+| Síntoma | Causa y solución |
+|---|---|
+| La carga falla con `Wrong boot mode` | GPIO 46 (canal B del encoder derecho) también decide el modo de arranque: **desconecta el encoder derecho** mientras cargas y usa BOOT + RESET (paso 2). |
+| Tras cargar, la HMI dice «el robot no responde» | El chip quedó en modo descarga: pulsa **RESET**. |
+| No compila: falta `Network.h` o errores en `mqtt_link.cpp` | Usa la plataforma fija de `platformio.ini` (`espressif32@6.12.0`); no la cambies por pioarduino. |
+| La HMI se ve vieja después de actualizar | Recarga sin caché (Safari ⌥⌘R, Chrome Ctrl+Shift+R) y reinicia `hmi/iniciar.sh`. |
+| No aparece la red `Balancin-XXXX` | El robot está configurado en tu red local: tecla `w` en el monitor para ver dónde está, o cámbialo en la tarjeta «WiFi del robot» de la HMI. |
+| No arranca en `RpmCascade` | Hay parámetros guardados de otra versión: `defaults` + `save` (paso 4) o «Guardar en el robot» desde la HMI. |
+| El robot se queda equilibrado pero desplazado | El ángulo de equilibrio (`setpoint_angle`, −2° de fábrica) no coincide con el real: ajústalo en la HMI hasta que quede en su sitio. |
 
 ---
 
 ## ✨ Características principales
 
-- 🦾 **Tres estructuras de control** que se eligen en ejecución (parámetro `structure`), sin perder los parámetros de ninguna. `RpmCascade` (fw 0.8.0) es la nueva cascada ángulo → aceleración → RPM → PWM, sin red neuronal; las otras dos:
+- 🦾 **Tres estructuras de control** que se eligen en ejecución (parámetro `structure`), sin perder los parámetros de ninguna:
+  - **`RpmCascade`** (por defecto desde fw 0.8.1): el lazo de ángulo pide aceleración de rueda, que se integra en la RPM deseada de un lazo de RPM (prealimentación + PI). Suma términos de posición y velocidad para volver a su sitio y conducir, y corrige el rumbo con el giroscopio. Corre a 200 Hz.
   - `SpeedOuter` (por defecto hasta fw 0.8.0; desde 0.8.1 arranca `RpmCascade`): estructura estándar de balancín. Un PI de velocidad fija el ángulo deseado y un PD de ángulo genera el PWM. Mantiene el robot en su sitio.
   - `AngleOuter`: estructura original. Un PID de ángulo genera una referencia de velocidad y un PI de velocidad genera el PWM.
 - 🧠 **Red neuronal** (3-3-1, librería local `Neural_Networks_FF`) que adapta `Kp` entre `KP_MIN` y `KP_MAX`. Si ambos valen lo mismo, `Kp` queda fija.
 - 📐 **Ángulo** con filtro complementario (0.98 giroscopio / 0.02 acelerómetro) y el filtro pasa-bajas interno del MPU6050 a 42 Hz.
 - ⚙️ **Zona muerta de motores** compensada de forma continua (sin saltos en PWM = 0), con una prueba automática para medirla.
-- 🕒 **FreeRTOS**: `TaskBalanceo` a 50 Hz en el núcleo 1, con período fijo (`vTaskDelayUntil`) y `dt` medido.
+- 🕒 **FreeRTOS**: `TaskBalanceo` en el núcleo 1 (200 Hz en `RpmCascade`, 50 Hz en las otras), con período fijo (`vTaskDelayUntil`) y `dt` medido. Telemetría a 50 Hz.
+- 🕹️ **Conducción** (fw 0.9.0): comando `drive` (velocidad y giro) que se vence en 1 s si no se renueva; desde la HMI con botones o flechas.
 - 🛡️ **Seguridad**: motores apagados si |ángulo| > 40°; se reactivan con el robot vertical (|ángulo| < 5°).
 - 💾 **Calibración persistente** de la MPU en memoria no volátil (NVS), sin interrumpir una lectura I2C.
-- 🎚️ **Parámetros ajustables en ejecución** (ganancias, estructura, RN, zona muerta, seguridad) por comandos JSON, validados y guardables en NVS. Base de la [HMI](#️-hmi-en-desarrollo).
+- 🎚️ **Parámetros ajustables en ejecución** (ganancias, estructura, RN, zona muerta, seguridad) por comandos JSON, validados y guardables en NVS. Base de la [HMI](#️-hmi).
 - 🛑 **Parada de emergencia** remota.
 - 📶 **WiFi**: red propia `Balancin-XXXX` (clave única por robot) o red local, con WebSocket para la HMI; el control sigue solo en su núcleo.
 - 📡 **MQTT** opcional (`balancin/<robot>/in|out|status`) para usar un broker como Mosquitto.
@@ -166,7 +272,13 @@ Los valores de `config.h` son los **de fábrica**. En ejecución se cambian con 
 
 | Clave | Constante (`config.h`) | Fábrica | Qué hace |
 |---|---|---|---|
-| `structure` | `CONTROL_STRUCTURE` | `SpeedOuter` | Estructura de control activa (`SpeedOuter` / `AngleOuter`). |
+| `structure` | `CONTROL_STRUCTURE` | `RpmCascade` | Estructura de control activa (`RpmCascade` / `SpeedOuter` / `AngleOuter`). |
+| `setpoint_angle` | `SETPOINT_ANGLE` | −2° | Ángulo de equilibrio (depende de la calibración de la IMU). |
+| `k_theta`, `k_omega` | `K_THETA`, `K_OMEGA` | 42.4 / 8 | `RpmCascade`: aceleración de rueda por grado y por °/s. |
+| `k_vel`, `k_x` | `K_VEL`, `K_X` | 2 / 152.4 | `RpmCascade`: términos de velocidad y de posición. |
+| `rpm_kp`, `rpm_ki` | `RPM_KP_DEFAULT`, `RPM_KI_DEFAULT` | 1.33 / 67 | Lazo de RPM. |
+| `k_psi`, `k_r`, `yaw_sign` | `K_PSI`, `K_R`, `YAW_SIGN` | 5 / 2 / +1 | Rumbo con el giroscopio (corrige el motor izquierdo). |
+| `v_ref_max`, `r_ref_max` | `V_REF_MAX`, `R_REF_MAX` | 20 RPM / 30 °/s | Velocidad y giro máximos al conducir. |
 | `kp_min`, `kp_max` | `KP_MIN`, `KP_MAX` | 70 / 70 | Rango de `Kp` que puede elegir la red. Iguales = `Kp` fija. |
 | `kd_angle` | `KD_ANGLE` | 1.25 | Acción derivativa del lazo de ángulo (amortigua). |
 | `kp_v`, `ki_v` | `KP_V`, `KI_V` | 0.05 / 0.03 | Ganancias del lazo de velocidad (`SpeedOuter`). |
@@ -178,6 +290,11 @@ Los valores de `config.h` son los **de fábrica**. En ejecución se cambian con 
 | `max_angle`, `rearm_angle` | `MAX_ANGLE`, `REARM_ANGLE` | 40° / 5° | Ángulo de caída y de reactivación. |
 
 Pines, PWM, encoders y período de control siguen fijos en `config.h`.
+
+**Guía rápida con `RpmCascade`**:
+- Si oscila rápido o vibra, baja `k_theta` y `k_omega`.
+- Si no vuelve a su sitio o se queda desplazado, sube `k_x` o ajusta `setpoint_angle`.
+- Si al avanzar en línea recta gira cada vez más, cambia `yaw_sign`.
 
 **Guía rápida con `SpeedOuter`**:
 - Si el robot se aleja cada vez más rápido y `Ref` se queda en ±4°, cambia `SPEED_LOOP_SIGN`.
@@ -191,12 +308,13 @@ Pines, PWM, encoders y período de control siguen fijos en `config.h`.
 - 🧩 **Placa**: ESP32-S3 (N16R8), configurada como `esp32-s3-devkitm-1`.
 - 🎛️ **IMU**: MPU6050 (I2C, SDA=41, SCL=42).
 - ⚙️ **Driver de motores**: TB6612FNG.
-  - Izquierdo: `AIN1`=7, `AIN2`=6, `PWMA`=5.
-  - Derecho: `BIN1`=16, `BIN2`=17, `PWMB`=18.
+  - Canal A (rueda **derecha**): `AIN1`=7, `AIN2`=6, `PWMA`=5.
+  - Canal B (rueda **izquierda**): `BIN1`=16, `BIN2`=17, `PWMB`=18.
   - `STBY`=15.
-- 🚗 **Motores** 25GA370 12 V 100 RPM con encoder (44 pulsos por vuelta del motor, reducción 1:119). Con LiPo 2S (8.4 V) llegan a unas 70 RPM.
+- 🚗 **Motores** 25GA370 12 V 100 RPM con encoder, leídos en cuadratura x4 con el contador por hardware (PCNT): **2 618 cuentas por vuelta de rueda** (medido). Con LiPo 2S llegan a unas 60 RPM.
   - Encoder derecho A/B = 3/46.
-  - Encoder izquierdo A/B = 9/11. Está defectuoso, así que la velocidad se mide sólo con la rueda derecha (`USE_LEFT_ENCODER = false`).
+  - Encoder izquierdo A/B = 9/11. Su sensor B está dañado: el lazo de RPM se cierra con la rueda derecha y el izquierdo recibe el mismo PWM más una corrección de rumbo con el giroscopio.
+- 📏 **Geometría**: rueda de 6.5 cm, centro de masa a ~4.5 cm del eje, 675 g.
 - 🔘 **Botón de calibración**: `BTN_CAL`=10 (activo en LOW).
 
 Los pines están fijados por la PCB. GPIO 3 y 46 son pines de arranque (*strapping*) del ESP32-S3.
@@ -254,15 +372,17 @@ Una línea que empieza con `{` es un comando JSON (`set`, `get`, `save`, `schema
 
 ## 🚀 Compilación y carga (PlatformIO)
 
-```
-git clone https://github.com/eatechnology1/Balancin-ControlRN.git
-cd Balancin-ControlRN
+Resumen (detalle en la [puesta en marcha](#-puesta-en-marcha-paso-a-paso)):
+
+```bash
 pio run -t upload
+```
+```bash
 pio device monitor
 ```
 
 - La plataforma está fija en `espressif32@6.12.0` (Arduino 2.0.17, ESP-IDF 4.4), la que usa el firmware. Sin versión, PlatformIO puede tomar pioarduino (Arduino 3), con la que no compila.
-- Si la carga falla con `Wrong boot mode`, mantén pulsado **BOOT** al empezar la carga (hasta que aparezca `Connecting...` seguido de `Writing`).
+- Si la carga falla con `Wrong boot mode`, desconecta el encoder derecho (GPIO 46 es pin de arranque) y entra en modo descarga con **BOOT + RESET** antes de cargar.
 - Las librerías **Neural_Networks_FF** y **Dynamic_Array** están en `lib/` y PlatformIO las detecta automáticamente. MPU6050 y ArduinoJson se descargan desde `lib_deps`.
 - El monitor usa 921600 baudios (`monitor_speed` en `platformio.ini` = `SERIAL_BAUD` en `config.h`).
 - Verificar el protocolo con el robot conectado: `~/.platformio/penv/bin/python hmi/tools/protocol_check.py` (añadir `--save` para probar la persistencia en NVS).
@@ -271,13 +391,13 @@ Más detalle en [Doc_Technical.md](Doc_Technical.md).
 
 ---
 
-## 🖥️ HMI (en desarrollo)
+## 🖥️ HMI
 
 Laboratorio web para monitorear, sintonizar y registrar el robot desde el PC o el celular.
 
 > La documentación de diseño de la HMI (`docs/`: plan y fases, protocolo, API del gateway) es interna y no se publica en este repositorio.
 
-Hoy: conexión por USB o WiFi (o robot simulado); escena 2D/3D y trazas a 50 Hz con marcas de eventos; parámetros en vivo y juegos de parámetros; comandos; parada de emergencia; historial de cada sesión en SQLite con reproducción, tabla y CSV. Desde PC, tablet o celular. Instalación y uso en [hmi/README.md](hmi/README.md).
+Conexión por USB, WiFi o MQTT (o con un robot simulado, sin hardware); escena 2D/3D y trazas a 50 Hz con marcas de eventos; parámetros en vivo y juegos de parámetros; **conducción** con botones o flechas; **banco de motores** (diagnóstico de encoders, ensayos, lazo de RPM); parada de emergencia; historial de cada sesión en SQLite con reproducción, tabla y CSV. Desde PC, tablet o celular. Instalación y uso en [hmi/README.md](hmi/README.md).
 
 ```bash
 hmi/iniciar.sh        # y abrir http://127.0.0.1:8000 (o desde el celular la dirección que imprime)
