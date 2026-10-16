@@ -165,8 +165,10 @@ void updateWheelRPM(float dt, float &rpmL_f, float &rpmR_f)
   float rpmL = ENC_L_SIGN * (pulsesL / PPR_WHEEL / dt) * 60.0f;
   float rpmR = ENC_R_SIGN * (pulsesR / PPR_WHEEL / dt) * 60.0f;
 
-  rpmL_filtered = 0.7f * rpmL_filtered + 0.3f * rpmL;
-  rpmR_filtered = 0.7f * rpmR_filtered + 0.3f * rpmR;
+  // Pasa-bajas con la misma constante de tiempo a cualquier periodo (0.7/0.3 a 50 Hz)
+  const float a = dt / (WHEEL_RPM_FILTER_TAU_S + dt);
+  rpmL_filtered += a * (rpmL - rpmL_filtered);
+  rpmR_filtered += a * (rpmR - rpmR_filtered);
 
   rpmL_f = rpmL_filtered;
   rpmR_f = rpmR_filtered;

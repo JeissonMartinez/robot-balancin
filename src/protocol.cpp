@@ -77,15 +77,16 @@ void protocolWriteParams(Print &out)
 
 void protocolWriteTelemetry(const Telemetry &t, Print &out, bool json)
 {
-  char buf[320]; // peor caso ≈ 240 bytes
+  char buf[400]; // peor caso ≈ 320 bytes
   int n;
   if (json)
     n = snprintf(buf, sizeof(buf),
                  "{\"type\":\"tel\",\"seq\":%lu,\"t\":%lu,\"ang\":%.2f,\"ref\":%.2f,\"w\":%.1f,"
                  "\"pwm\":%.1f,\"pwmM\":%.1f,\"rpmL\":%.1f,\"rpmR\":%.1f,\"kp\":%.2f,\"dt\":%.4f,"
-                 "\"uP\":%.1f,\"uI\":%.1f,\"uD\":%.1f,\"st\":\"%s\"}\n",
+                 "\"uP\":%.1f,\"uI\":%.1f,\"uD\":%.1f,\"rr\":%.2f,\"acc\":%.1f,\"ym\":%.2f,\"uF\":%.1f,"
+                 "\"st\":\"%s\"}\n",
                  (unsigned long)t.seq, (unsigned long)t.tMs, t.angle, t.angleRef, t.rate, t.pwm, t.pwmMotor,
-                 t.rpmL, t.rpmR, t.kp, t.dt, t.uP, t.uI, t.uD, robotStateName(t.state));
+                 t.rpmL, t.rpmR, t.kp, t.dt, t.uP, t.uI, t.uD, t.rpmRef, t.accel, t.rpmMeas, t.uF, robotStateName(t.state));
   else
     n = snprintf(buf, sizeof(buf),
                  "Ang: %.2f | Ref: %.2f | w: %.1f | PWM: %.1f | RPM L: %.1f | RPM R: %.1f | Kp: %.2f | dt: %.4f | %s\n",

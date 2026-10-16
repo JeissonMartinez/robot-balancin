@@ -16,7 +16,7 @@
 import type { Gateway } from '../core/gateway';
 import type { ParamDesc, Params } from '../core/protocol';
 import {
-  GROUPS, decimalsFor, formatValue, sameValue, stepFor, uiFor, uiOrder, validate,
+  GROUPS, appliesTo, decimalsFor, formatValue, sameValue, stepFor, uiFor, uiOrder, validate,
 } from '../core/paramspec';
 import { confirmDialog, escapeHtml } from './dialog';
 
@@ -297,8 +297,9 @@ export function setupParams(root: HTMLElement, headExtra: HTMLElement, gw: Gatew
       const ui = uiFor(c.d);
       c.root.classList.toggle('pendiente', pending.has(key));
       c.root.classList.toggle('modificado', robot[key] !== undefined && !sameValue(robot[key], c.d.def));
-      c.root.classList.toggle('sin-uso', !!ui.only && !!st && ui.only !== st);
-      c.root.querySelector('.only')!.textContent = ui.only && st && ui.only !== st ? ` Sin efecto con ${st}.` : '';
+      const unused = !appliesTo(ui, st);
+      c.root.classList.toggle('sin-uso', unused);
+      c.root.querySelector('.only')!.textContent = unused ? ` Sin efecto con ${st}.` : '';
       const err = errs[key] ?? rejected.get(key);
       c.root.classList.toggle('error', !!err);
       c.root.querySelector('.err-msg')!.textContent = err ? ` ${err}.` : '';

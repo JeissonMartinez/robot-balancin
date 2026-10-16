@@ -41,8 +41,11 @@ int16_t manualL = 0, manualR = 0;
 float manualRef = 0;
 uint32_t manualMs = 0;
 bool manualExpired = false;
+// En el banco: sin mezcla de la prealimentación cerca de 0 y con reinicio del integral al
+// cambiar de sentido (comportamiento de M2)
 RpmConfig cfg = {RPM_KP_DEFAULT, RPM_KI_DEFAULT, RPM_TS_MS_DEFAULT, RPM_WIN_MS_DEFAULT, true,
-                 RPM_FF_K_DEFAULT, RPM_FF_B_DEFAULT, RPM_I_MAX_DEFAULT, true, RPM_REF_TAU_MS_DEFAULT};
+                 RPM_FF_K_DEFAULT, RPM_FF_B_DEFAULT, RPM_I_MAX_DEFAULT, true, RPM_REF_TAU_MS_DEFAULT,
+                 0.0f, true};
 
 Sample *buf = nullptr;
 float segVal[BENCH_MAX_SEGMENTS];
@@ -75,53 +78,6 @@ float segmentAt(uint32_t tMs)
   }
   return 0;
 }
-
-inline float sgn(float v)
-{
-  return v > 0 ? 1.0f : (v < 0 ? -1.0f : 0.0f);
-}
-
-/** Estado del lazo de RPM (sólo lo usa TaskBanco). */
-struct RpmLoop
-{
-  float integ = 0, uF = 0, uP = 0, out = 0, meas = 0, lastRef = 0, refF = 0;
-
-  void reset()
-  {
-    integ = uF = uP = out = 0;
-    lastRef = refF = 0;
-  }
-
-  /** Un paso del lazo. `dt` en s; devuelve el PWM a aplicar. */
-  float step(const RpmConfig &c, float ref, float y, float dt)
-  {
-    meas = y;
-    if (ref == 0)
-    {
-      reset();
-      meas = y;
-      return 0; // referencia 0: freno, sin integral que empuje
-    }
-    if (sgn(ref) != sgn(lastRef))
-      integ = 0; // cambio de sentido: el integral acumulado ya no sirve
-    lastRef = ref;
-    // Modelo de referencia: la respuesta que se espera del motor a la prealimentación
-    if (c.refTauMs > 0)
-      refF += (ref - refF) * (1.0f - expf(-dt / (c.refTauMs * 1e-3f)));
-    else
-      refF = ref;
-    const float e = refF - y;
-    uF = c.ff && c.ffK > 0 ? sgn(ref) * (fabsf(ref) + c.ffB) / c.ffK : 0;
-    uP = c.kp * e;
-    // Integración condicional: no integrar si el mando ya está saturado en el sentido del error
-    const float candidate = constrain(integ + c.ki * e * dt, -c.iMax, c.iMax);
-    const float raw = uF + uP + candidate;
-    if (!((raw > PWM_LIMIT && e > 0) || (raw < -PWM_LIMIT && e < 0)))
-      integ = candidate;
-    out = constrain(uF + uP + integ, -PWM_LIMIT, PWM_LIMIT);
-    return out;
-  }
-};
 
 void TaskBanco(void *)
 {

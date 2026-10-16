@@ -101,7 +101,9 @@ float updateAngle(float dt)
 
   float gyroX = (gx - gx_offset) / 131.0f;
   angularRate = gyroX;
-  angleFiltered = 0.98f * (angleFiltered + gyroX * dt) + 0.02f * accelAngle(ay, az);
+  // α = τ/(τ + dt): misma constante de tiempo con cualquier periodo (0.98 a 50 Hz)
+  const float alpha = ANGLE_FILTER_TAU_S / (ANGLE_FILTER_TAU_S + dt);
+  angleFiltered = alpha * (angleFiltered + gyroX * dt) + (1.0f - alpha) * accelAngle(ay, az);
   return angleFiltered;
 }
 

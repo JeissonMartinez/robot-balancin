@@ -8,12 +8,13 @@
  */
 import type { ParamDesc, Params } from './protocol';
 
-type Structure = 'SpeedOuter' | 'AngleOuter';
+type Structure = 'SpeedOuter' | 'AngleOuter' | 'RpmCascade';
+const PWM_STRUCTURES: Structure[] = ['SpeedOuter', 'AngleOuter'];
 
 export interface ParamUi {
   label: string;
   group: string;
-  only?: Structure; // sólo tiene efecto con esa estructura
+  only?: Structure | Structure[]; // sólo tiene efecto con esa(s) estructura(s)
   options?: Record<number, string>; // enteros con nombre (se muestran en un selector)
 }
 
@@ -21,6 +22,7 @@ export const GROUPS = [
   'Estructura y referencias',
   'Lazo de ángulo',
   'Lazo de velocidad',
+  'Cascada RPM (M3)',
   'Red neuronal (Kp adaptativa)',
   'Actuador y sensor',
   'Seguridad',
@@ -32,11 +34,23 @@ const UI: Record<string, ParamUi> = {
   setpoint_angle: { label: 'Ángulo de referencia θ₀', group: 'Estructura y referencias' },
   speed_ref: { label: 'Velocidad deseada', group: 'Estructura y referencias', only: 'SpeedOuter' },
 
-  kp_min: { label: 'Kp mínima', group: 'Lazo de ángulo' },
-  kp_max: { label: 'Kp máxima', group: 'Lazo de ángulo' },
-  kd_angle: { label: 'Kd', group: 'Lazo de ángulo' },
+  kp_min: { label: 'Kp mínima', group: 'Lazo de ángulo', only: PWM_STRUCTURES },
+  kp_max: { label: 'Kp máxima', group: 'Lazo de ángulo', only: PWM_STRUCTURES },
+  kd_angle: { label: 'Kd', group: 'Lazo de ángulo', only: PWM_STRUCTURES },
   ki_angle: { label: 'Ki', group: 'Lazo de ángulo', only: 'AngleOuter' },
-  gyro_deriv: { label: 'Derivada con el giroscopio', group: 'Lazo de ángulo' },
+  gyro_deriv: { label: 'Derivada con el giroscopio', group: 'Lazo de ángulo', only: PWM_STRUCTURES },
+
+  k_theta: { label: 'Kθ (aceleración por grado)', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  k_omega: { label: 'Kω (aceleración por °/s)', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  k_vel: { label: 'Kv (término de velocidad)', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  cascade_sign: { label: 'Signo del lazo de ángulo', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  rpm_ref_max: { label: 'RPM deseada máxima', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  rpm_kp: { label: 'Kp del lazo de RPM', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  rpm_ki: { label: 'Ki del lazo de RPM', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  rpm_ff_k: { label: 'Prealimentación K', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  rpm_ff_b: { label: 'Prealimentación B', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  rpm_win: { label: 'Ventana de medición', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
+  rpm_ref_tau: { label: 'Modelo de referencia (τ)', group: 'Cascada RPM (M3)', only: 'RpmCascade' },
 
   kp_v: { label: 'Kp velocidad', group: 'Lazo de velocidad', only: 'SpeedOuter' },
   ki_v: { label: 'Ki velocidad', group: 'Lazo de velocidad', only: 'SpeedOuter' },
@@ -49,7 +63,7 @@ const UI: Record<string, ParamUi> = {
   nn_lr: { label: 'Tasa de aprendizaje', group: 'Red neuronal (Kp adaptativa)' },
   kp_tau: { label: 'Filtro de Kp (τ)', group: 'Red neuronal (Kp adaptativa)' },
 
-  pwm_deadband: { label: 'Compensación de zona muerta', group: 'Actuador y sensor' },
+  pwm_deadband: { label: 'Compensación de zona muerta', group: 'Actuador y sensor', only: PWM_STRUCTURES },
   mpu_dlpf: {
     label: 'Filtro pasa-bajas del MPU',
     group: 'Actuador y sensor',
@@ -64,6 +78,12 @@ const UI: Record<string, ParamUi> = {
 export function uiOrder(key: string): number {
   const i = Object.keys(UI).indexOf(key);
   return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+}
+
+/** ¿El parámetro tiene efecto con la estructura `st`? */
+export function appliesTo(ui: ParamUi, st: string | undefined): boolean {
+  if (!ui.only || !st) return true;
+  return Array.isArray(ui.only) ? ui.only.includes(st as Structure) : ui.only === st;
 }
 
 export function uiFor(d: ParamDesc): ParamUi {

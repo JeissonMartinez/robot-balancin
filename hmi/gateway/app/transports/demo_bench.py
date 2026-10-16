@@ -76,7 +76,7 @@ class RpmLoop:
         if ref == 0:
             self.reset()
             return 0.0
-        if _sgn(ref) != _sgn(self.last_ref):
+        if c.get("reset_sign", True) and _sgn(ref) != _sgn(self.last_ref):
             self.integ = 0.0
         self.last_ref = ref
         if c["ref_tau_ms"] > 0:
@@ -84,7 +84,8 @@ class RpmLoop:
         else:
             self.ref_f = ref
         e = self.ref_f - y
-        self.uF = _sgn(ref) * (abs(ref) + c["ff_b"]) / c["ff_k"] if c["ff"] and c["ff_k"] > 0 else 0.0
+        blend = min(1.0, abs(ref) / c["ff_blend"]) if c.get("ff_blend", 0) > 0 else 1.0
+        self.uF = _sgn(ref) * (abs(ref) + c["ff_b"] * blend) / c["ff_k"] if c["ff"] and c["ff_k"] > 0 else 0.0
         self.uP = c["kp"] * e
         cand = max(-c["i_max"], min(c["i_max"], self.integ + c["ki"] * e * dt))
         raw = self.uF + self.uP + cand

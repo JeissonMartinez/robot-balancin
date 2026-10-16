@@ -36,6 +36,17 @@ struct Params
   float rearmAngle;      // [°]
   uint8_t mpuDlpfMode;   // 0..6
   bool useGyroDerivative;
+  // --- RpmCascade (M3, layout 2). Al final: lo guardado con el layout 1 se migra copiando
+  //     el prefijo (ver paramsInit) ---
+  float cascadeSign;     // ±1
+  float kTheta;          // [RPM/s por °]
+  float kOmega;          // [RPM/s por °/s]
+  float kVel;            // [1/s]
+  float rpmRefMax;       // [RPM]
+  float rpmKp, rpmKi;    // lazo de RPM
+  float rpmFfK, rpmFfB;  // prealimentación
+  uint8_t rpmWinMs;      // ventana de medición [ms]
+  uint8_t rpmRefTauMs;   // modelo de referencia [ms]
 };
 
 /** Carga de NVS (si hay un juego válido) o de fábrica. Llamar una vez en setup(). */
@@ -74,5 +85,5 @@ void paramsToJson(const Params &p, JsonObject out);
 /** Escribe la tabla de descriptores: [{key, type, min, max, def, unit, desc}, ...]. */
 void paramsSchemaToJson(JsonArray out);
 
-/** @return Nombre de la estructura ("SpeedOuter" / "AngleOuter"). */
+/** @return Nombre de la estructura ("SpeedOuter" / "AngleOuter" / "RpmCascade"). */
 const char *structureName(ControlStructure s);

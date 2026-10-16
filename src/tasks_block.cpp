@@ -5,6 +5,7 @@
 #include "mpu_block.h"
 #include "nn_cascade_block.h"
 #include "params.h"
+#include "rpm_cascade.h"
 #include <atomic>
 #include <esp_timer.h>
 
@@ -17,10 +18,17 @@ static std::atomic<bool> paused(false);
 static std::atomic<bool> estop(false);
 static std::atomic<uint32_t> dropped(0);
 
+static uint32_t periodFor(ControlStructure s)
+{
+  return s == ControlStructure::RpmCascade ? CASCADE_PERIOD_MS : CONTROL_PERIOD_MS;
+}
+
 static void TaskBalanceo(void *pvParameters)
 {
-  const TickType_t period = pdMS_TO_TICKS(CONTROL_PERIOD_MS);
-  const float nominalDt = CONTROL_PERIOD_MS / 1000.0f;
+  TickType_t period = pdMS_TO_TICKS(CONTROL_PERIOD_MS);
+  float nominalDt = CONTROL_PERIOD_MS / 1000.0f;
+  uint32_t periodMs = CONTROL_PERIOD_MS;
+  uint32_t telAccMs = 0;
 
   TickType_t lastWake = xTaskGetTickCount();
   int64_t lastUs = esp_timer_get_time();
@@ -32,6 +40,9 @@ static void TaskBalanceo(void *pvParameters)
   uint32_t paramsVersion = paramsSnapshot(p);
   uint8_t appliedDlpf = p.mpuDlpfMode;
   ControlStructure appliedStructure = p.structure;
+  periodMs = periodFor(p.structure);
+  period = pdMS_TO_TICKS(periodMs);
+  nominalDt = periodMs / 1000.0f;
 
   while (true)
   {
@@ -72,6 +83,12 @@ static void TaskBalanceo(void *pvParameters)
       }
       structureChanged = p.structure != appliedStructure;
       appliedStructure = p.structure;
+      if (structureChanged)
+      {
+        periodMs = periodFor(p.structure);
+        period = pdMS_TO_TICKS(periodMs);
+        nominalDt = periodMs / 1000.0f;
+      }
     }
 
     // --- dt medido ---
@@ -96,6 +113,7 @@ static void TaskBalanceo(void *pvParameters)
     {
       active = true;
       resetCascade(p, angle);
+      rpmCascadeReset();
       resetWheelRPM();
       rpmL_f = rpmR_f = 0;
       enableMotors();
@@ -103,11 +121,22 @@ static void TaskBalanceo(void *pvParameters)
     else if (active && structureChanged)
     {
       resetCascade(p, angle);
+      rpmCascadeReset();
     }
 
     float pwm = 0, pwmMotor = 0;
     ControlTerms terms = {};
-    if (active)
+    CascadeState cs = {};
+    const bool rpmCascade = p.structure == ControlStructure::RpmCascade;
+    if (active && rpmCascade)
+    {
+      // M3: la prealimentación del lazo de RPM ya compensa la zona muerta
+      pwm = pwmMotor = rpmCascadeStep(p, angle, getAngularRate(), periodMs, dt);
+      driveMotorsDifferential(pwmMotor, pwmMotor); // izquierdo: seguidor
+      cs = rpmCascadeState();
+      terms = {cs.uP, cs.uI, 0.0f};
+    }
+    else if (active)
     {
       pwm = cascada(p, angle, getAngularRate(), rpmL_f, rpmR_f, dt);
       pwmMotor = compensateDeadband(pwm, p.pwmDeadband);
@@ -115,11 +144,17 @@ static void TaskBalanceo(void *pvParameters)
       terms = getControlTerms();
     }
 
-    RobotState state = active ? RobotState::Active : (stopNow ? RobotState::EStop : RobotState::Idle);
-    Telemetry t = {seq++, millis(), angle, getAngleReference(), getAngularRate(), pwm, pwmMotor,
-                   rpmL_f, rpmR_f, getKpAngle(), dt, terms.p, terms.i, terms.d, state};
-    if (xQueueSend(telemetryQueue, &t, 0) != pdTRUE)
-      dropped.fetch_add(1);
+    telAccMs += periodMs;
+    if (telAccMs >= TELEMETRY_PERIOD_MS)
+    {
+      telAccMs -= TELEMETRY_PERIOD_MS;
+      RobotState state = active ? RobotState::Active : (stopNow ? RobotState::EStop : RobotState::Idle);
+      Telemetry t = {seq++, millis(), angle, rpmCascade ? p.setpointAngle : getAngleReference(), getAngularRate(),
+                     pwm, pwmMotor, rpmL_f, rpmR_f, getKpAngle(), dt, terms.p, terms.i, terms.d,
+                     cs.rpmRef, cs.accel, cs.rpmMeas, cs.uF, state};
+      if (xQueueSend(telemetryQueue, &t, 0) != pdTRUE)
+        dropped.fetch_add(1);
+    }
 
     vTaskDelayUntil(&lastWake, period);
   }

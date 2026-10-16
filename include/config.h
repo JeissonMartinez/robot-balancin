@@ -25,7 +25,7 @@
 #include <driver/ledc.h>
 
 // ===================== VERSIONES ===============================
-#define FW_VERSION "0.7.1"
+#define FW_VERSION "0.8.0"
 const int PROTOCOL_VERSION = 1;              // docs/hmi/PROTOCOLO.md
 const uint32_t SERIAL_BAUD = 921600;         // 50 Hz de telemetría JSON ≈ 9 kB/s
 
@@ -131,7 +131,14 @@ const float RPM_I_MAX_DEFAULT = 255.0f;
 const float BENCH_MAX_RPM = 60.0f;           // Referencia máxima [RPM] (≈ 61 RPM con PWM 255 a 7.65 V)
 
 // ===================== CONTROL ================================
-const uint32_t CONTROL_PERIOD_MS = 20;       // Periodo de TaskBalanceo (50 Hz)
+const uint32_t CONTROL_PERIOD_MS = 20;       // Periodo de TaskBalanceo (50 Hz) en SpeedOuter y AngleOuter
+const uint32_t CASCADE_PERIOD_MS = 5;        // Periodo en RpmCascade (200 Hz, M3): el margen se pierde con retardos
+const uint32_t TELEMETRY_PERIOD_MS = 20;     // La telemetría sale a 50 Hz con cualquier periodo de control
+// Filtro complementario: constante de tiempo de la corrección con el acelerómetro. 0.98 a 50 Hz
+// equivale a τ = 0.98 s; se mantiene igual a cualquier periodo (α = τ/(τ + dt)).
+const float ANGLE_FILTER_TAU_S = 0.98f;
+// Pasa-bajas de las RPM de la telemetría: 0.7/0.3 a 50 Hz equivale a τ = 46.7 ms
+const float WHEEL_RPM_FILTER_TAU_S = 0.0467f;
 const float PWM_LIMIT = 255.0f;              // Saturación de PWM (8 bits)
 const float MAX_ANGLE = 40.0f;               // |ángulo| > MAX_ANGLE => robot caído, motores off
 const float REARM_ANGLE = 5.0f;              // |ángulo| < REARM_ANGLE => se reanuda el control
@@ -145,6 +152,22 @@ const float PWM_DEADBAND_BLEND = 4.0f;
 // La tarea de control publica una trama por ciclo (50 Hz). Por Serial se envía 1 de cada
 // TELEMETRY_DIV_DEFAULT (5 = 10 Hz, legible en el monitor); el comando "tel" lo cambia.
 const uint8_t TELEMETRY_DIV_DEFAULT = 5;
+
+// ===================== RpmCascade (M3) =========================
+// α = s·[Kθ·(θ − θ_setpoint) + Kω·ω] + Kv·RPM_ref   [RPM/s];   RPM_ref += α·dt (±RPM_REF_MAX)
+// La RPM deseada pasa al lazo de RPM de M2 (rueda derecha; el izquierdo, seguidor).
+// Ganancias iniciales por ubicación de polos con la geometría medida (centro de masa 4.5 cm sobre
+// el eje, rueda de 6.5 cm, 675 g): péndulo (l + r)·θ'' = g·θ − a, polo inestable 11.3 rad/s;
+// ω_n = 12 rad/s, ζ ≈ 1. Estables con hasta ~30 ms de retardo adicional (docs/control/M3).
+// s = −1: un ángulo negativo (inclinado hacia adelante) pide aceleración hacia adelante.
+// Kv > 0 en el MISMO sentido de la velocidad: para frenar, el robot primero acelera un poco más
+// y así se inclina hacia atrás (término débil; el lazo de velocidad completo es M4).
+const float CASCADE_SIGN = -1.0f;
+const float K_THETA = 110.0f;                // [RPM/s por °]
+const float K_OMEGA = 9.5f;                  // [RPM/s por °/s]
+const float K_VEL = 1.5f;                    // [1/s]
+const float RPM_REF_MAX = 55.0f;             // Tope de la RPM deseada [RPM]
+const float RPM_FF_BLEND = 1.0f;             // [RPM] la prealimentación crece desde 0 hasta esta |r|
 
 // ===================== PRUEBA DE ZONA MUERTA ('d' por Serial) ==
 const int DEADBAND_TEST_MAX_PWM = 120;       // PWM máximo de la rampa
@@ -166,7 +189,8 @@ const uint32_t DEADBAND_TEST_SETTLE_MS = 1500; // Reposo antes de cada rampa
 enum class ControlStructure
 {
   AngleOuter,
-  SpeedOuter
+  SpeedOuter,
+  RpmCascade // M3: ángulo → aceleración de rueda → ∫ → RPM deseada → lazo de RPM (M2) → PWM
 };
 const ControlStructure CONTROL_STRUCTURE = ControlStructure::SpeedOuter;
 

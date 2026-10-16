@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .base import CloseHandler, LineHandler, Transport
 from .demo_bench import ENC, GET_MAX_ROWS, SimBench
+from .demo_cascade import SimCascade
 
 SCHEMA = json.loads((Path(__file__).with_name("demo_schema.json")).read_text(encoding="utf-8"))
 PERIOD = 0.02
@@ -150,6 +151,7 @@ class DemoTransport(Transport):
         self._hello()
         loop = asyncio.get_running_loop()
         sim = SimRobot(self.params)
+        casc = SimCascade()  # estructura RpmCascade (M3)
         seq = 0
         t0 = next_t = loop.time()
         reported = (0, 0)
@@ -168,7 +170,10 @@ class DemoTransport(Transport):
                 await asyncio.sleep(max(0.0, next_t - loop.time()))
                 continue
             self.bench.idle(int(PERIOD * 1000))
-            fields, fell = sim.step(self.params, self.estop)
+            if self.params["structure"] == "RpmCascade":
+                fields, fell = casc.step(self.params, self.estop)
+            else:
+                fields, fell = sim.step(self.params, self.estop)
             if fell:
                 self._emit(">> Robot caído (simulado).")
             frame = {"type": "tel", "seq": seq, "t": int((loop.time() - t0) * 1000), **fields}

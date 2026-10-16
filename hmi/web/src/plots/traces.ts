@@ -57,6 +57,7 @@ export const PLOTS: PlotDef[] = [
       { key: 'uP', label: 'P', slot: 3, decimals: 1 },
       { key: 'uI', label: 'I', slot: 4, show: false, decimals: 1 },
       { key: 'uD', label: 'D', slot: 5, decimals: 1 },
+      { key: 'uF', label: 'prealim.', slot: 3, dash: [2, 3], show: false, decimals: 1 },
     ],
   },
   {
@@ -64,6 +65,7 @@ export const PLOTS: PlotDef[] = [
     series: [
       { key: 'rpmR', label: 'derecha', slot: 1, decimals: 1 },
       { key: 'rpmL', label: 'izquierda', slot: 2, decimals: 1 },
+      { key: 'rr', label: 'deseada', slot: 3, dash: [6, 4], decimals: 1 },
     ],
   },
 ];

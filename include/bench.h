@@ -24,21 +24,7 @@
 #pragma once
 #include <Arduino.h>
 #include <ArduinoJson.h>
-
-/** Configuración del lazo de RPM. */
-struct RpmConfig
-{
-  float kp;      // [PWM/RPM]
-  float ki;      // [PWM/(RPM·s)]
-  uint8_t tsMs;  // período del lazo
-  uint8_t winMs; // ventana de medición
-  bool ff;       // prealimentación activa
-  float ffK;     // [RPM/PWM]
-  float ffB;     // [RPM]
-  float iMax;    // tope del integral [PWM]
-  uint8_t refTauMs; // modelo de referencia: τ del filtro de la referencia para el error (0 = sin filtro)
-  bool follow;   // el izquierdo recibe el mismo PWM
-};
+#include "rpm_loop.h"
 
 /** Trama en vivo del banco (mensaje "mot"). */
 struct BenchFrame

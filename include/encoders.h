@@ -28,7 +28,8 @@ void setupEncoders();
 void readAndResetEncoders(long &pulsesL, long &pulsesR);
 
 /**
- * @brief Calcula las RPM de cada rueda con filtro IIR (0.7 anterior / 0.3 actual).
+ * @brief Calcula las RPM de cada rueda con un pasa-bajas de τ = WHEEL_RPM_FILTER_TAU_S
+ *        (0.7 anterior / 0.3 actual a 50 Hz).
  * @param dt Tiempo desde la última llamada [s].
  * @param rpmL_f RPM filtrada rueda izquierda (salida).
  * @param rpmR_f RPM filtrada rueda derecha (salida).

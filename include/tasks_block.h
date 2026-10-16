@@ -2,11 +2,12 @@
  * @file tasks_block.h
  * @brief Tarea FreeRTOS de balanceo, pausa segura, parada de emergencia y telemetría.
  *
- * TaskBalanceo (núcleo 1, prioridad 3, periodo CONTROL_PERIOD_MS):
+ * TaskBalanceo (núcleo 1, prioridad 3, periodo CONTROL_PERIOD_MS; CASCADE_PERIOD_MS en RpmCascade):
  *  - Periodo fijo con vTaskDelayUntil y dt medido con esp_timer_get_time().
  *  - Al inicio de cada ciclo copia los parámetros activos (paramsSnapshot). Si cambió
  *    el filtro del MPU lo reescribe; si cambió la estructura reinicia el controlador.
- *  - Ángulo (MPU) + RPM (encoders) → cascada() → mismo PWM a ambos motores.
+ *  - Ángulo (MPU) + RPM (encoders) → cascada() o rpmCascadeStep() → mismo PWM a ambos motores.
+ *  - La telemetría sale cada TELEMETRY_PERIOD_MS (50 Hz) con cualquier periodo de control.
  *  - Seguridad: si |ángulo| > maxAngle apaga motores y deja de ejecutar/entrenar
  *    el controlador; lo reactiva (con estado reiniciado) al volver a |ángulo| < rearmAngle.
  *    Arranca desactivado hasta que el robot se pone vertical.
@@ -44,7 +45,12 @@ struct Telemetry
   float rpmR;
   float kp;
   float dt;       // [s]
-  float uP, uI, uD; // aporte de cada término al PWM (ver ControlTerms)
+  float uP, uI, uD; // aporte de cada término al PWM (ver ControlTerms; en RpmCascade: P, I del lazo de RPM)
+  // RpmCascade (M3); 0 en las otras estructuras
+  float rpmRef;   // RPM deseada
+  float accel;    // aceleración de rueda pedida [RPM/s]
+  float rpmMeas;  // RPM que mide el lazo de RPM (ventana)
+  float uF;       // prealimentación del lazo de RPM [PWM]
   RobotState state;
 };
 

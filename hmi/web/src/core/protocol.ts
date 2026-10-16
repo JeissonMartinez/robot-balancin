@@ -21,6 +21,10 @@ export interface Frame {
   uP?: number; // desde fw 0.3.0
   uI?: number;
   uD?: number;
+  rr?: number; // fw ≥ 0.8.0 (RpmCascade): RPM deseada
+  acc?: number; // aceleración de rueda pedida [RPM/s]
+  ym?: number; // RPM que mide el lazo de RPM
+  uF?: number; // prealimentación del lazo de RPM [PWM]
   st: RobotState;
 }
 

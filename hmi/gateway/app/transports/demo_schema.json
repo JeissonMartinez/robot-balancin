@@ -4,11 +4,12 @@
   "type": "enum",
   "options": [
    "SpeedOuter",
-   "AngleOuter"
+   "AngleOuter",
+   "RpmCascade"
   ],
   "def": "SpeedOuter",
   "unit": "",
-  "desc": "Estructura de control (SpeedOuter / AngleOuter). Reinicia el controlador."
+  "desc": "Estructura de control (SpeedOuter / AngleOuter / RpmCascade). Reinicia el controlador."
  },
  {
   "key": "setpoint_angle",
@@ -189,5 +190,104 @@
   "def": true,
   "unit": "",
   "desc": "Derivada con el giroscopio (-ω) en vez de diferenciar el error."
+ },
+ {
+  "key": "cascade_sign",
+  "type": "sign",
+  "min": -1,
+  "max": 1,
+  "def": -1,
+  "unit": "",
+  "desc": "Signo del lazo de ángulo (RpmCascade): -1 = inclinado adelante (θ < 0) acelera adelante."
+ },
+ {
+  "key": "k_theta",
+  "type": "float",
+  "min": 0,
+  "max": 400,
+  "def": 110,
+  "unit": "RPM/s/°",
+  "desc": "Aceleración de rueda por grado de error (RpmCascade)."
+ },
+ {
+  "key": "k_omega",
+  "type": "float",
+  "min": 0,
+  "max": 40,
+  "def": 9.5,
+  "unit": "RPM/s/(°/s)",
+  "desc": "Aceleración de rueda por °/s del giroscopio (RpmCascade)."
+ },
+ {
+  "key": "k_vel",
+  "type": "float",
+  "min": 0,
+  "max": 10,
+  "def": 1.5,
+  "unit": "1/s",
+  "desc": "Término de velocidad: acelera en el sentido de la marcha para inclinarse y frenar (RpmCascade)."
+ },
+ {
+  "key": "rpm_ref_max",
+  "type": "float",
+  "min": 5,
+  "max": 60,
+  "def": 55,
+  "unit": "RPM",
+  "desc": "Tope de la RPM deseada (RpmCascade)."
+ },
+ {
+  "key": "rpm_kp",
+  "type": "float",
+  "min": 0,
+  "max": 20,
+  "def": 1.33,
+  "unit": "PWM/RPM",
+  "desc": "Proporcional del lazo de RPM (RpmCascade)."
+ },
+ {
+  "key": "rpm_ki",
+  "type": "float",
+  "min": 0,
+  "max": 2000,
+  "def": 67,
+  "unit": "PWM/(RPM·s)",
+  "desc": "Integral del lazo de RPM (RpmCascade)."
+ },
+ {
+  "key": "rpm_ff_k",
+  "type": "float",
+  "min": 0.05,
+  "max": 1,
+  "def": 0.25,
+  "unit": "RPM/PWM",
+  "desc": "Prealimentación: pendiente de la recta RPM–PWM (M0)."
+ },
+ {
+  "key": "rpm_ff_b",
+  "type": "float",
+  "min": 0,
+  "max": 20,
+  "def": 1.8,
+  "unit": "RPM",
+  "desc": "Prealimentación: desplazamiento de la recta (zona muerta)."
+ },
+ {
+  "key": "rpm_win",
+  "type": "int",
+  "min": 5,
+  "max": 40,
+  "def": 10,
+  "unit": "ms",
+  "desc": "Ventana de medición de la RPM (múltiplo de 5 ms)."
+ },
+ {
+  "key": "rpm_ref_tau",
+  "type": "int",
+  "min": 0,
+  "max": 100,
+  "def": 20,
+  "unit": "ms",
+  "desc": "Modelo de referencia del lazo de RPM (0 = sin modelo)."
  }
 ]

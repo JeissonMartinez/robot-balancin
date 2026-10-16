@@ -3,7 +3,10 @@
 #include <stddef.h>
 
 // Cambiar si se modifica la estructura Params: invalida lo guardado en NVS.
-static const uint16_t PARAMS_LAYOUT_VERSION = 1;
+static const uint16_t PARAMS_LAYOUT_VERSION = 2;
+// Layout 1 (hasta fw 0.7.x): Params terminaba en useGyroDerivative. Los campos de M3 se
+// agregaron al final, así que un blob del layout 1 es un prefijo válido del actual.
+#define PARAMS_V1_SIZE offsetof(Params, cascadeSign)
 
 enum class ParamType : uint8_t
 {
@@ -27,7 +30,7 @@ struct ParamDesc
 #define P(field) offsetof(Params, field)
 
 static const ParamDesc DESCS[] = {
-    {"structure", ParamType::Structure, P(structure), 0, 1, "", "Estructura de control (SpeedOuter / AngleOuter). Reinicia el controlador."},
+    {"structure", ParamType::Structure, P(structure), 0, 2, "", "Estructura de control (SpeedOuter / AngleOuter / RpmCascade). Reinicia el controlador."},
     {"setpoint_angle", ParamType::Float, P(setpointAngle), -10, 10, "°", "Referencia del lazo de ángulo."},
     {"kp_min", ParamType::Float, P(kpMin), 0, 150, "", "Kp mínima que puede elegir la RN."},
     {"kp_max", ParamType::Float, P(kpMax), 0, 150, "", "Kp máxima que puede elegir la RN (= kp_min: Kp fija)."},
@@ -48,6 +51,17 @@ static const ParamDesc DESCS[] = {
     {"rearm_angle", ParamType::Float, P(rearmAngle), 1, 15, "°", "Ángulo de reactivación del control."},
     {"mpu_dlpf", ParamType::Int, P(mpuDlpfMode), 0, 6, "", "Filtro del MPU6050: 0=256, 1=188, 2=98, 3=42, 4=20, 5=10, 6=5 Hz."},
     {"gyro_deriv", ParamType::Bool, P(useGyroDerivative), 0, 1, "", "Derivada con el giroscopio (-ω) en vez de diferenciar el error."},
+    {"cascade_sign", ParamType::Sign, P(cascadeSign), -1, 1, "", "Signo del lazo de ángulo (RpmCascade): -1 = inclinado adelante (θ < 0) acelera adelante."},
+    {"k_theta", ParamType::Float, P(kTheta), 0, 400, "RPM/s/°", "Aceleración de rueda por grado de error (RpmCascade)."},
+    {"k_omega", ParamType::Float, P(kOmega), 0, 40, "RPM/s/(°/s)", "Aceleración de rueda por °/s del giroscopio (RpmCascade)."},
+    {"k_vel", ParamType::Float, P(kVel), 0, 10, "1/s", "Término de velocidad: acelera en el sentido de la marcha para inclinarse y frenar (RpmCascade)."},
+    {"rpm_ref_max", ParamType::Float, P(rpmRefMax), 5, 60, "RPM", "Tope de la RPM deseada (RpmCascade)."},
+    {"rpm_kp", ParamType::Float, P(rpmKp), 0, 20, "PWM/RPM", "Proporcional del lazo de RPM (RpmCascade)."},
+    {"rpm_ki", ParamType::Float, P(rpmKi), 0, 2000, "PWM/(RPM·s)", "Integral del lazo de RPM (RpmCascade)."},
+    {"rpm_ff_k", ParamType::Float, P(rpmFfK), 0.05, 1, "RPM/PWM", "Prealimentación: pendiente de la recta RPM–PWM (M0)."},
+    {"rpm_ff_b", ParamType::Float, P(rpmFfB), 0, 20, "RPM", "Prealimentación: desplazamiento de la recta (zona muerta)."},
+    {"rpm_win", ParamType::Int, P(rpmWinMs), 5, 40, "ms", "Ventana de medición de la RPM (múltiplo de 5 ms)."},
+    {"rpm_ref_tau", ParamType::Int, P(rpmRefTauMs), 0, 100, "ms", "Modelo de referencia del lazo de RPM (0 = sin modelo)."},
 };
 static const size_t N_DESCS = sizeof(DESCS) / sizeof(DESCS[0]);
 
@@ -106,7 +120,15 @@ static const ParamDesc *findDesc(const char *key)
 
 const char *structureName(ControlStructure s)
 {
-  return s == ControlStructure::SpeedOuter ? "SpeedOuter" : "AngleOuter";
+  switch (s)
+  {
+  case ControlStructure::SpeedOuter:
+    return "SpeedOuter";
+  case ControlStructure::RpmCascade:
+    return "RpmCascade";
+  default:
+    return "AngleOuter";
+  }
 }
 
 static bool parseStructure(const char *name, ControlStructure &out)
@@ -115,6 +137,8 @@ static bool parseStructure(const char *name, ControlStructure &out)
     out = ControlStructure::SpeedOuter;
   else if (strcmp(name, "AngleOuter") == 0)
     out = ControlStructure::AngleOuter;
+  else if (strcmp(name, "RpmCascade") == 0)
+    out = ControlStructure::RpmCascade;
   else
     return false;
   return true;
@@ -175,6 +199,17 @@ Params paramsFactory()
   p.rearmAngle = REARM_ANGLE;
   p.mpuDlpfMode = MPU_DLPF_MODE;
   p.useGyroDerivative = USE_GYRO_DERIVATIVE;
+  p.cascadeSign = CASCADE_SIGN;
+  p.kTheta = K_THETA;
+  p.kOmega = K_OMEGA;
+  p.kVel = K_VEL;
+  p.rpmRefMax = RPM_REF_MAX;
+  p.rpmKp = RPM_KP_DEFAULT;
+  p.rpmKi = RPM_KI_DEFAULT;
+  p.rpmFfK = RPM_FF_K_DEFAULT;
+  p.rpmFfB = RPM_FF_B_DEFAULT;
+  p.rpmWinMs = RPM_WIN_MS_DEFAULT;
+  p.rpmRefTauMs = RPM_REF_TAU_MS_DEFAULT;
   return p;
 }
 
@@ -193,11 +228,19 @@ void paramsInit()
 
   Preferences prefs;
   prefs.begin("params", true);
-  if (prefs.getUShort("layout", 0) == PARAMS_LAYOUT_VERSION &&
-      prefs.getBytesLength("blob") == sizeof(Params))
+  const uint16_t layout = prefs.getUShort("layout", 0);
+  const size_t len = prefs.getBytesLength("blob");
+  size_t take = 0;
+  if (layout == PARAMS_LAYOUT_VERSION && len == sizeof(Params))
+    take = sizeof(Params);
+  else if (layout == 1 && len <= PARAMS_V1_SIZE + 4 && len >= PARAMS_V1_SIZE)
+    take = PARAMS_V1_SIZE; // migración: lo guardado + valores de fábrica para lo nuevo
+  if (take)
   {
-    Params stored;
-    prefs.getBytes("blob", &stored, sizeof(Params));
+    Params stored = paramsFactory();
+    uint8_t raw[sizeof(Params)];
+    prefs.getBytes("blob", raw, len);
+    memcpy(&stored, raw, take);
     String err;
     if (validate(stored, err))
     {
@@ -245,7 +288,7 @@ bool paramsApplyJson(JsonObjectConst in, String &err)
       ControlStructure s;
       if (!v.is<const char *>() || !parseStructure(v.as<const char *>(), s))
       {
-        err = String(d->key) + " debe ser \"SpeedOuter\" o \"AngleOuter\"";
+        err = String(d->key) + " debe ser \"SpeedOuter\", \"AngleOuter\" o \"RpmCascade\"";
         return false;
       }
       writeField(cand, *d, (float)(int)s);
@@ -351,6 +394,7 @@ void paramsSchemaToJson(JsonArray out)
       JsonArray opts = o["options"].to<JsonArray>();
       opts.add("SpeedOuter");
       opts.add("AngleOuter");
+      opts.add("RpmCascade");
     }
     else
     {

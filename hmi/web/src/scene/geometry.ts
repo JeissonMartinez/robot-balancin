@@ -18,7 +18,7 @@ export interface Block {
   color: string;
 }
 
-export const WHEEL_RADIUS = 0.034; // m. Se usa también para convertir RPM en avance
+export const WHEEL_RADIUS = 0.0325; // m, medido (rueda de 6.5 cm). Se usa también para convertir RPM en avance
 export const TRACK = 0.116; // m, separación entre ruedas
 
 export const BLOCKS: Block[] = [

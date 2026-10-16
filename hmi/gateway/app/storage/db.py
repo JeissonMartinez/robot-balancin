@@ -27,6 +27,8 @@ TEL_FIELDS = [
     ("seq", "seq"), ("t", "t_ms"), ("ang", "ang"), ("ref", "ref"), ("w", "w"),
     ("pwm", "pwm"), ("pwmM", "pwm_m"), ("rpmL", "rpm_l"), ("rpmR", "rpm_r"),
     ("kp", "kp"), ("dt", "dt"), ("uP", "u_p"), ("uI", "u_i"), ("uD", "u_d"), ("st", "st"),
+    # RpmCascade (fw ≥ 0.8.0)
+    ("rr", "rr"), ("acc", "acc"), ("ym", "ym"), ("uF", "u_f"),
 ]
 
 DDL = """
@@ -46,7 +48,8 @@ CREATE TABLE IF NOT EXISTS telemetry (
     host_ts REAL NOT NULL,
     seq INTEGER, t_ms INTEGER,
     ang REAL, ref REAL, w REAL, pwm REAL, pwm_m REAL, rpm_l REAL, rpm_r REAL,
-    kp REAL, dt REAL, u_p REAL, u_i REAL, u_d REAL, st TEXT
+    kp REAL, dt REAL, u_p REAL, u_i REAL, u_d REAL, st TEXT,
+    rr REAL, acc REAL, ym REAL, u_f REAL
 );
 CREATE INDEX IF NOT EXISTS telemetry_session_t ON telemetry(session_id, t_ms);
 CREATE TABLE IF NOT EXISTS events (
@@ -111,6 +114,10 @@ class Database:
             for col in ("kind", "cfg_json"):
                 if col not in cols:
                     self._con.execute(f"ALTER TABLE captures ADD COLUMN {col} TEXT")
+            cols = {r[1] for r in self._con.execute("PRAGMA table_info(telemetry)")}
+            for col in ("rr", "acc", "ym", "u_f"):
+                if col not in cols:
+                    self._con.execute(f"ALTER TABLE telemetry ADD COLUMN {col} REAL")
             self._con.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
             self._con.commit()
 
